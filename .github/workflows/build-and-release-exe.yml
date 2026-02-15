@@ -223,6 +223,7 @@ jobs:
 
             Commit: ${{ github.sha }}
           artifacts: release/CleanAI-windows-x64.zip
+          artifactErrorsFailBuild: true
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
