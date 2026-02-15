@@ -44,9 +44,28 @@ jobs:
           # It is not a vcpkg port, so only install the packages that vcpkg actually provides.
           & "$env:VCPKG_ROOT/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
-      - name: Install Microsoft.WindowsAppSDK CMake package
+      - name: Configure CMake (Release)
         shell: pwsh
         run: |
+          function Invoke-CmakeConfigure([string[]]$extraArgs) {
+            & cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 `
+              -DCMAKE_BUILD_TYPE=Release `
+              -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+              @extraArgs
+
+            return ($LASTEXITCODE -eq 0)
+          }
+
+          # First try: use Windows App SDK from preinstalled Visual Studio components.
+          if (Invoke-CmakeConfigure @()) {
+            Write-Host "CMake configure succeeded with preinstalled Microsoft.WindowsAppSDK."
+            exit 0
+          }
+
+          Write-Warning "CMake configure failed with preinstalled SDK. Trying NuGet fallback..."
+
+          Remove-Item -Path build -Recurse -Force -ErrorAction SilentlyContinue
+
           if (Get-Command nuget -ErrorAction SilentlyContinue) {
             $nuget = "nuget"
           }
@@ -55,32 +74,48 @@ jobs:
             Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
           }
 
-          $windowsAppSdkVersion = "1.5.240607001"
           $windowsAppSdkPackagesDir = Join-Path $env:RUNNER_TEMP "nuget-packages"
+          $candidateVersions = @(
+            "1.7.250401001",
+            "1.6.240923002",
+            "1.5.240607001"
+          )
 
-          & $nuget install Microsoft.WindowsAppSDK `
-            -Version $windowsAppSdkVersion `
-            -OutputDirectory $windowsAppSdkPackagesDir `
-            -Source "https://api.nuget.org/v3/index.json" `
-            -NonInteractive
+          $resolvedWindowsAppSdkCmakeDir = $null
 
-          $windowsAppSdkCmakeDir = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$windowsAppSdkVersion/build/native"
-          $windowsAppSdkConfig = Join-Path $windowsAppSdkCmakeDir "Microsoft.WindowsAppSDKConfig.cmake"
+          foreach ($version in $candidateVersions) {
+            Write-Host "Trying Microsoft.WindowsAppSDK $version from NuGet..."
 
-          if (-not (Test-Path $windowsAppSdkConfig)) {
-            throw "Microsoft.WindowsAppSDKConfig.cmake was not found after NuGet install: $windowsAppSdkConfig"
+            & $nuget install Microsoft.WindowsAppSDK `
+              -Version $version `
+              -OutputDirectory $windowsAppSdkPackagesDir `
+              -Source "https://api.nuget.org/v3/index.json" `
+              -NonInteractive
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Warning "NuGet install failed for Microsoft.WindowsAppSDK $version"
+              continue
+            }
+
+            $candidateDir = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$version/build/native"
+            $candidateConfig = Join-Path $candidateDir "Microsoft.WindowsAppSDKConfig.cmake"
+            if (Test-Path $candidateConfig) {
+              $resolvedWindowsAppSdkCmakeDir = $candidateDir
+              break
+            }
+
+            Write-Warning "Microsoft.WindowsAppSDKConfig.cmake not found for version $version"
           }
 
-          "WINDOWS_APP_SDK_CMAKE_DIR=$windowsAppSdkCmakeDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Resolved Microsoft.WindowsAppSDK_DIR=$windowsAppSdkCmakeDir"
+          if (-not $resolvedWindowsAppSdkCmakeDir) {
+            throw "Failed to resolve Microsoft.WindowsAppSDKConfig.cmake from preinstalled tooling and NuGet fallback."
+          }
 
-      - name: Configure CMake (Release)
-        shell: pwsh
-        run: |
-          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DMicrosoft.WindowsAppSDK_DIR="$env:WINDOWS_APP_SDK_CMAKE_DIR"
+          Write-Host "Resolved Microsoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkCmakeDir"
+
+          if (-not (Invoke-CmakeConfigure @("-DMicrosoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkCmakeDir"))) {
+            throw "CMake configure failed even after resolving Microsoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkCmakeDir"
+          }
 
       - name: Build CleanAI
         shell: pwsh
