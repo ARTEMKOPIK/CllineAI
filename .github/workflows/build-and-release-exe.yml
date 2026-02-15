@@ -103,6 +103,16 @@ jobs:
             "$env:VCPKG_ROOT/installed/x64-windows/bin"
           )
 
+          if ($env:VCToolsRedistDir) {
+            $vcRedistDirs = Get-ChildItem -Path $env:VCToolsRedistDir -Directory -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -ieq 'Microsoft.VC143.CRT' } |
+              ForEach-Object { $_.FullName }
+
+            foreach ($dir in $vcRedistDirs) {
+              $searchDirs += $dir
+            }
+          }
+
           $copiedDlls = @{}
           $missingRequiredDeps = [System.Collections.Generic.List[string]]::new()
           $allowedMissingPatterns = @(
