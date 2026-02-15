@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <chrono>
+#include <stdexcept>
 #include <format>
 
 namespace CleanAI::Core
@@ -32,7 +33,10 @@ namespace CleanAI::Core
         auto target = sessionPath / relative;
         std::filesystem::create_directories(target.parent_path());
 
-        MoveFileExW(filePath.c_str(), target.wstring().c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
+        if (!MoveFileExW(filePath.c_str(), target.wstring().c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH))
+        {
+            throw std::runtime_error("Failed to move file into quarantine");
+        }
         co_return target.wstring();
     }
 
