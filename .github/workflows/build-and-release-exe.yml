@@ -120,7 +120,10 @@ jobs:
       - name: Build CleanAI
         shell: pwsh
         run: |
-          cmake --build build --config Release --target CleanAI
+          # Explicitly restore NuGet packages during build. This prevents intermittent
+          # MSBuild failures on hosted runners where Windows App SDK targets/packages
+          # are not restored for the generated CMake solution yet.
+          cmake --build build --config Release --target CleanAI -- /restore /m
 
       - name: Prepare distributable bundle (EXE + runtime dependencies)
         shell: pwsh
