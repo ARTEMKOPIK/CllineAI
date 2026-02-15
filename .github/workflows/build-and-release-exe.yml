@@ -120,10 +120,20 @@ jobs:
       - name: Build CleanAI
         shell: pwsh
         run: |
-          # Explicitly restore NuGet packages during build. This prevents intermittent
-          # MSBuild failures on hosted runners where Windows App SDK targets/packages
-          # are not restored for the generated CMake solution yet.
-          cmake --build build --config Release --target CleanAI -- /restore /m
+          # Restore NuGet packages explicitly before build. Passing '/restore' through
+          # `cmake --build` is unreliable with Visual Studio generators because CMake
+          # may invoke a backend that does not accept that switch.
+          $solutionPath = "build/CleanAI.sln"
+          if (-not (Test-Path $solutionPath)) {
+            throw "Expected Visual Studio solution not found: $solutionPath"
+          }
+
+          & msbuild $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild restore failed with exit code $LASTEXITCODE"
+          }
+
+          cmake --build build --config Release --target CleanAI --parallel
 
       - name: Prepare distributable bundle (EXE + runtime dependencies)
         shell: pwsh
