@@ -7,6 +7,10 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: release-latest-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -51,11 +55,17 @@ jobs:
           $bundleDir = "release/CleanAI"
           New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
 
-          $exePath = "build/Release/CleanAI.exe"
-          Copy-Item $exePath "$bundleDir/CleanAI.exe" -Force
+          $releaseOutputDir = "build/Release"
+          if (-not (Test-Path "$releaseOutputDir/CleanAI.exe")) {
+            throw "Build output not found: $releaseOutputDir/CleanAI.exe"
+          }
+
+          # Copy the full Release output first because WinUI/Windows App SDK apps
+          # require runtime assets (e.g. .pri resources) that are not PE DLL dependencies.
+          Copy-Item "$releaseOutputDir/*" $bundleDir -Recurse -Force
 
           $searchDirs = @(
-            "build/Release",
+            $releaseOutputDir,
             "$env:VCPKG_ROOT/installed/x64-windows/bin"
           )
 
