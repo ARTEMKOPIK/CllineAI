@@ -105,7 +105,10 @@ jobs:
 
           if ($env:VCToolsRedistDir) {
             $vcRedistDirs = Get-ChildItem -Path $env:VCToolsRedistDir -Directory -Recurse -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -ieq 'Microsoft.VC143.CRT' } |
+              Where-Object {
+                $_.Name -ieq 'Microsoft.VC143.CRT' -and
+                $_.FullName -imatch '[\\/]x64[\\/]'
+              } |
               ForEach-Object { $_.FullName }
 
             foreach ($dir in $vcRedistDirs) {
