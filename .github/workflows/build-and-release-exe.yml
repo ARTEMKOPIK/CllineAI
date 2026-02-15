@@ -60,6 +60,31 @@ jobs:
           )
 
           $copiedDlls = @{}
+          $missingRequiredDeps = [System.Collections.Generic.List[string]]::new()
+          $allowedMissingPatterns = @(
+            '^api-ms-win-.*\.dll$',
+            '^ext-ms-win-.*\.dll$',
+            '^kernel32\.dll$',
+            '^kernelbase\.dll$',
+            '^user32\.dll$',
+            '^gdi32\.dll$',
+            '^advapi32\.dll$',
+            '^ws2_32\.dll$',
+            '^secur32\.dll$',
+            '^ole32\.dll$',
+            '^oleaut32\.dll$',
+            '^shell32\.dll$',
+            '^combase\.dll$',
+            '^comdlg32\.dll$',
+            '^shlwapi\.dll$',
+            '^crypt32\.dll$',
+            '^bcrypt\.dll$',
+            '^rpcrt4\.dll$',
+            '^ntdll\.dll$',
+            '^msvcp_win\.dll$',
+            '^ucrtbase\.dll$'
+          )
+
           $queue = [System.Collections.Generic.Queue[string]]::new()
           $queue.Enqueue("$bundleDir/CleanAI.exe")
 
@@ -88,7 +113,21 @@ jobs:
               }
 
               if ($null -eq $sourcePath) {
-                Write-Host "Dependency not bundled (system or unresolved): $dep"
+                $isAllowedMissing = $false
+                foreach ($pattern in $allowedMissingPatterns) {
+                  if ($dep -match $pattern) {
+                    $isAllowedMissing = $true
+                    break
+                  }
+                }
+
+                if ($isAllowedMissing) {
+                  Write-Host "Allowed system dependency not bundled: $dep"
+                  continue
+                }
+
+                $missingRequiredDeps.Add($dep)
+                Write-Error "Required dependency could not be resolved for bundling: $dep"
                 continue
               }
 
@@ -97,6 +136,11 @@ jobs:
               $copiedDlls[$dep] = $true
               $queue.Enqueue($targetPath)
             }
+          }
+
+          if ($missingRequiredDeps.Count -gt 0) {
+            $distinctMissing = $missingRequiredDeps | Sort-Object -Unique
+            throw "Bundling failed. Missing required runtime dependencies: $($distinctMissing -join ', ')"
           }
 
           Compress-Archive -Path "$bundleDir/*" -DestinationPath "release/CleanAI-windows-x64.zip" -Force
