@@ -146,7 +146,16 @@ jobs:
             Write-Warning "MSBuild is not available in PATH after MSVC setup. Skipping explicit restore and continuing with CMake build."
           }
 
+          # Some CMake/VS combinations expose slightly different build target naming.
+          # Try explicit app target first, then fall back to building default targets.
           cmake --build build --config Release --target CleanAI --parallel
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Building target 'CleanAI' failed with exit code $LASTEXITCODE. Retrying default build targets..."
+            cmake --build build --config Release --parallel
+            if ($LASTEXITCODE -ne 0) {
+              throw "CMake build failed for both explicit target 'CleanAI' and default solution targets."
+            }
+          }
 
       - name: Prepare distributable bundle (EXE + runtime dependencies)
         shell: pwsh
