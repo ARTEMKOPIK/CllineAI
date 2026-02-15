@@ -35,7 +35,10 @@ jobs:
       - name: Install C++ dependencies
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows microsoft-windowsappsdk:x64-windows
+          # Microsoft.WindowsAppSDK is provided by the Visual Studio toolchain on GitHub-hosted
+          # windows-latest runners and is consumed by CMake via find_package().
+          # It is not a vcpkg port, so only install the packages that vcpkg actually provides.
+          & "$env:VCPKG_ROOT/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
       - name: Configure CMake (Release)
         shell: pwsh
