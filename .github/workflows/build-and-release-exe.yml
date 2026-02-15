@@ -40,33 +40,33 @@ jobs:
           # It is not a vcpkg port, so only install the packages that vcpkg actually provides.
           & "$env:VCPKG_ROOT/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
-      - name: Resolve Microsoft.WindowsAppSDK CMake package path
+      - name: Install Microsoft.WindowsAppSDK CMake package
         shell: pwsh
         run: |
-          $vswhere = Join-Path "${env:ProgramFiles(x86)}" "Microsoft Visual Studio/Installer/vswhere.exe"
-          if (-not (Test-Path $vswhere)) {
-            throw "vswhere.exe was not found at expected location: $vswhere"
+          if (Get-Command nuget -ErrorAction SilentlyContinue) {
+            $nuget = "nuget"
+          }
+          else {
+            $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+            Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
           }
 
-          $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if (-not $vsPath) {
-            throw "Could not detect a Visual Studio installation path via vswhere.exe"
+          $windowsAppSdkVersion = "1.5.240607001"
+          $windowsAppSdkPackagesDir = Join-Path $env:RUNNER_TEMP "nuget-packages"
+
+          & $nuget install Microsoft.WindowsAppSDK `
+            -Version $windowsAppSdkVersion `
+            -OutputDirectory $windowsAppSdkPackagesDir `
+            -Source "https://api.nuget.org/v3/index.json" `
+            -NonInteractive
+
+          $windowsAppSdkCmakeDir = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$windowsAppSdkVersion/build/native"
+          $windowsAppSdkConfig = Join-Path $windowsAppSdkCmakeDir "Microsoft.WindowsAppSDKConfig.cmake"
+
+          if (-not (Test-Path $windowsAppSdkConfig)) {
+            throw "Microsoft.WindowsAppSDKConfig.cmake was not found after NuGet install: $windowsAppSdkConfig"
           }
 
-          $cmakeExtensionsRoot = Join-Path $vsPath "Common7/IDE/CommonExtensions/Microsoft/CMake/CMakeExtensions"
-          if (-not (Test-Path $cmakeExtensionsRoot)) {
-            throw "CMake extensions path was not found: $cmakeExtensionsRoot"
-          }
-
-          $configPath = Get-ChildItem -Path $cmakeExtensionsRoot -Filter "Microsoft.WindowsAppSDKConfig.cmake" -Recurse -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1 -ExpandProperty FullName
-
-          if (-not $configPath) {
-            throw "Microsoft.WindowsAppSDKConfig.cmake was not found under: $cmakeExtensionsRoot"
-          }
-
-          $windowsAppSdkCmakeDir = Split-Path $configPath -Parent
           "WINDOWS_APP_SDK_CMAKE_DIR=$windowsAppSdkCmakeDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Resolved Microsoft.WindowsAppSDK_DIR=$windowsAppSdkCmakeDir"
 
