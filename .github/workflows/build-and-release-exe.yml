@@ -135,9 +135,15 @@ jobs:
             }
           }
 
-          & msbuild $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
-          if ($LASTEXITCODE -ne 0) {
-            Write-Warning "MSBuild restore failed with exit code $LASTEXITCODE. Continuing to build because Restore may be unavailable for this generated native solution."
+          $msbuild = Get-Command msbuild -ErrorAction SilentlyContinue
+          if ($msbuild) {
+            & $msbuild.Source $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
+            if ($LASTEXITCODE -ne 0) {
+              Write-Warning "MSBuild restore failed with exit code $LASTEXITCODE. Continuing to build because Restore may be unavailable for this generated native solution."
+            }
+          }
+          else {
+            Write-Warning "MSBuild is not available in PATH after MSVC setup. Skipping explicit restore and continuing with CMake build."
           }
 
           cmake --build build --config Release --target CleanAI --parallel
