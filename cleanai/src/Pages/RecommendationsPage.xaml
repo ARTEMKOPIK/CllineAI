@@ -1,0 +1,45 @@
+<Page
+    x:Class="CleanAI.Pages.RecommendationsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#121212">
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch" Spacing="12">
+            <TextBlock Text="Рекомендации ИИ" FontSize="24" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <Button Content="Очистить всё безопасное" Background="#ef4444" Click="OnCleanAll" CornerRadius="4"/>
+        </StackPanel>
+
+        <TabView Grid.Row="1">
+            <TabViewItem Header="Можно удалить">
+                <ListView IsItemClickEnabled="True">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Padding="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="cache_very_long_filename_that_will_be_trimmed..."/>
+                                    <TextBlock Text="Кэш Chrome, не использовался 120 дней" Opacity="0.8"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <Button Content="Удалить" Background="#ef4444"/>
+                                    <Button Content="Проверить" Background="#f59e0b"/>
+                                    <Button Content="Оставить" Background="#64748b"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </TabViewItem>
+            <TabViewItem Header="Спросить"/>
+            <TabViewItem Header="Оставить"/>
+        </TabView>
+    </Grid>
+</Page>
