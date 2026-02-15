@@ -162,6 +162,7 @@ jobs:
           path: release/CleanAI-windows-x64.zip
 
       - name: Publish/Update latest GitHub Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: ncipollo/release-action@v1
         with:
           tag: latest
