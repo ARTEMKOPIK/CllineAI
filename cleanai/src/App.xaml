@@ -1,0 +1,15 @@
+<Application
+    x:Class="CleanAI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <Color x:Key="AppBackground">#121212</Color>
+            <Color x:Key="Accent">#6366f1</Color>
+            <Style TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Segoe UI Variable"/>
+                <Setter Property="Foreground" Value="#f8fafc"/>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

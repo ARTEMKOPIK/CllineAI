@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+  <Identity Name="CleanAI" Publisher="CN=CleanAI" Version="1.0.0.0"/>
+  <Properties>
+    <DisplayName>CleanAI</DisplayName>
+    <PublisherDisplayName>CleanAI</PublisherDisplayName>
+    <Logo>assets/icons/cleanai.ico</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22621.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+  <Resources>
+    <Resource Language="ru-RU"/>
+  </Resources>
+  <Applications>
+    <Application Id="App" Executable="CleanAI.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="CleanAI"
+        Description="Умная очистка диска с ИИ"
+        BackgroundColor="#121212"
+        Square150x150Logo="assets/icons/cleanai.ico"
+        Square44x44Logo="assets/icons/cleanai.ico"/>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+  </Capabilities>
+</Package>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="AppName" xml:space="preserve"><value>CleanAI</value></data>
+  <data name="Scan" xml:space="preserve"><value>Сканировать</value></data>
+  <data name="Recommendations" xml:space="preserve"><value>Рекомендации</value></data>
+  <data name="History" xml:space="preserve"><value>История</value></data>
+  <data name="Treemap" xml:space="preserve"><value>Карта файлов</value></data>
+</root>

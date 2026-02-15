@@ -1,0 +1,54 @@
+<Window
+    x:Class="CleanAI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:pages="using:CleanAI.Pages"
+    Title="CleanAI"
+    Background="#121212">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="32"/>
+        </Grid.RowDefinitions>
+
+        <NavigationView x:Name="RootNav"
+                        PaneDisplayMode="Left"
+                        OpenPaneLength="280"
+                        IsBackButtonVisible="Collapsed"
+                        SelectionChanged="OnNavigationSelectionChanged"
+                        Background="#121212">
+            <NavigationView.PaneCustomContent>
+                <Border Background="#D91e293b" Padding="16" CornerRadius="8">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Image Source="assets/icons/cleanai.ico" Width="24" Height="24"/>
+                        <TextBlock Text="CleanAI" FontWeight="SemiBold" FontSize="16"/>
+                    </StackPanel>
+                </Border>
+            </NavigationView.PaneCustomContent>
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Сканирование" Icon="Find" Tag="scan"/>
+                <NavigationViewItem Content="Карта файлов" Icon="MapLayers" Tag="treemap"/>
+                <NavigationViewItem Content="Рекомендации" Icon="Bullets" Tag="recommendations"/>
+                <NavigationViewItem Content="История" Icon="History" Tag="history"/>
+            </NavigationView.MenuItems>
+            <Frame x:Name="ContentFrame">
+                <Frame.ContentTransitions>
+                    <TransitionCollection>
+                        <NavigationThemeTransition DefaultNavigationTransitionInfo="EntranceNavigationTransitionInfo"/>
+                    </TransitionCollection>
+                </Frame.ContentTransitions>
+            </Frame>
+        </NavigationView>
+
+        <Border Grid.Row="1" Background="#1e293b" Padding="10,4" VerticalAlignment="Stretch">
+            <TextBlock Text="Диск C: | Свободно: 120 ГБ | Карантин: 0 ГБ | Последнее сканирование: —" VerticalAlignment="Center"/>
+        </Border>
+
+        <Grid x:Name="LoadingOverlay" Background="#AA000000" Visibility="Collapsed">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                <ProgressRing IsActive="True" Width="64" Height="64" Foreground="#6366f1"/>
+                <TextBlock Text="Сканирование... 0 файлов" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,28 @@
+<Page
+    x:Class="CleanAI.Pages.HistoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#121212">
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="История действий" FontSize="24" FontWeight="SemiBold"/>
+            <Button Content="Экспортировать" Click="OnExport" Background="#6366f1"/>
+        </StackPanel>
+        <ListView Grid.Row="1">
+            <ListViewItem>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="15.02.2026 14:30 | C:\Temp\file.bin | Удалён"/>
+                    <Button Grid.Column="1" Content="Восстановить" Background="#64748b"/>
+                </Grid>
+            </ListViewItem>
+        </ListView>
+    </Grid>
+</Page>

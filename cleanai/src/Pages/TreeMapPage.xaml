@@ -1,0 +1,21 @@
+<Page
+    x:Class="CleanAI.Pages.TreeMapPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#121212">
+    <Grid Padding="24" ColumnSpacing="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*"/>
+            <ColumnDefinition Width="2*"/>
+        </Grid.ColumnDefinitions>
+        <Border Background="#1e293b" CornerRadius="8" Padding="8">
+            <Canvas x:Name="TreemapCanvas"/>
+        </Border>
+        <Border Grid.Column="1" Background="#0f172a" CornerRadius="8" Padding="12">
+            <StackPanel>
+                <TextBlock Text="Детали файла" FontWeight="SemiBold"/>
+                <TextBlock x:Name="DetailsText" Text="Выберите блок на карте" TextWrapping="WrapWholeWords" Margin="0,8,0,0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>
