@@ -21,8 +21,11 @@ namespace CleanAI::Core
                 root,
                 std::filesystem::directory_options::skip_permission_denied);
 
-            for (auto const& entry : iterator)
+            auto end = std::filesystem::recursive_directory_iterator();
+            for (; iterator != end; ++iterator)
             {
+                auto const& entry = *iterator;
+
                 if (entry.is_directory() && ShouldSkipDirectory(entry.path().wstring()))
                 {
                     iterator.disable_recursion_pending();
