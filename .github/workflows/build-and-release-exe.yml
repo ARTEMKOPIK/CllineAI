@@ -123,14 +123,57 @@ jobs:
           # Restore NuGet packages explicitly before build. Passing '/restore' through
           # `cmake --build` is unreliable with Visual Studio generators because CMake
           # may invoke a backend that does not accept that switch.
-          $solutionPath = "build/CleanAI.sln"
-          if (-not (Test-Path $solutionPath)) {
-            throw "Expected Visual Studio solution not found: $solutionPath"
+          #
+          # We use multiple restore strategies + retries because hosted runners
+          # occasionally fail to resolve package feeds on the first attempt.
+          function Invoke-WithRetry([scriptblock]$Action, [string]$Description, [int]$MaxAttempts = 3, [int]$DelaySeconds = 10) {
+            for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+              Write-Host "[$attempt/$MaxAttempts] $Description"
+              & $Action
+              if ($LASTEXITCODE -eq 0) {
+                return
+              }
+
+              if ($attempt -lt $MaxAttempts) {
+                Write-Warning "$Description failed with exit code $LASTEXITCODE. Retrying in $DelaySeconds seconds..."
+                Start-Sleep -Seconds $DelaySeconds
+              }
+            }
+
+            throw "$Description failed after $MaxAttempts attempts"
           }
 
-          & msbuild $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
-          if ($LASTEXITCODE -ne 0) {
-            throw "MSBuild restore failed with exit code $LASTEXITCODE"
+          $solutionPath = "build/CleanAI.sln"
+          if (-not (Test-Path $solutionPath)) {
+            $detectedSolutions = Get-ChildItem -Path build -Filter *.sln -File -ErrorAction SilentlyContinue
+            if ($detectedSolutions.Count -eq 1) {
+              $solutionPath = $detectedSolutions[0].FullName
+              Write-Warning "Using detected solution path: $solutionPath"
+            }
+            else {
+              throw "Expected Visual Studio solution not found at build/CleanAI.sln and auto-detection failed."
+            }
+          }
+
+          if (Get-Command nuget -ErrorAction SilentlyContinue) {
+            $nuget = "nuget"
+          }
+          else {
+            $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+            Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+          }
+
+          # First restore pass: nuget.exe with explicit sources for better resiliency.
+          Invoke-WithRetry -Description "NuGet restore" -Action {
+            & $nuget restore $solutionPath `
+              -NonInteractive `
+              -Verbosity detailed `
+              -Source "https://api.nuget.org/v3/index.json;https://www.nuget.org/api/v2"
+          }
+
+          # Second restore pass: msbuild restore with hardened restore settings.
+          Invoke-WithRetry -Description "MSBuild restore" -Action {
+            & msbuild $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /p:RestoreRetryCount=5 /p:RestoreDisableParallel=true /p:RestoreIgnoreFailedSources=true /m
           }
 
           cmake --build build --config Release --target CleanAI --parallel
