@@ -45,17 +45,67 @@ jobs:
         run: |
           cmake --build build --config Release --target CleanAI
 
-      - name: Prepare single EXE artifact
+      - name: Prepare distributable bundle (EXE + runtime dependencies)
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release -Force | Out-Null
-          Copy-Item "build/Release/CleanAI.exe" "release/CleanAI.exe" -Force
+          $bundleDir = "release/CleanAI"
+          New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
+
+          $exePath = "build/Release/CleanAI.exe"
+          Copy-Item $exePath "$bundleDir/CleanAI.exe" -Force
+
+          $searchDirs = @(
+            "build/Release",
+            "$env:VCPKG_ROOT/installed/x64-windows/bin"
+          )
+
+          $copiedDlls = @{}
+          $queue = [System.Collections.Generic.Queue[string]]::new()
+          $queue.Enqueue("$bundleDir/CleanAI.exe")
+
+          while ($queue.Count -gt 0) {
+            $currentBinary = $queue.Dequeue()
+            $deps = & dumpbin /DEPENDENTS $currentBinary 2>$null |
+              ForEach-Object {
+                if ($_ -match '^\s+([A-Za-z0-9._-]+\.dll)$') {
+                  $matches[1].ToLowerInvariant()
+                }
+              } |
+              Sort-Object -Unique
+
+            foreach ($dep in $deps) {
+              if ($copiedDlls.ContainsKey($dep)) {
+                continue
+              }
+
+              $sourcePath = $null
+              foreach ($dir in $searchDirs) {
+                $candidate = Join-Path $dir $dep
+                if (Test-Path $candidate) {
+                  $sourcePath = $candidate
+                  break
+                }
+              }
+
+              if ($null -eq $sourcePath) {
+                Write-Host "Dependency not bundled (system or unresolved): $dep"
+                continue
+              }
+
+              $targetPath = Join-Path $bundleDir $dep
+              Copy-Item $sourcePath $targetPath -Force
+              $copiedDlls[$dep] = $true
+              $queue.Enqueue($targetPath)
+            }
+          }
+
+          Compress-Archive -Path "$bundleDir/*" -DestinationPath "release/CleanAI-windows-x64.zip" -Force
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CleanAI-exe
-          path: release/CleanAI.exe
+          name: CleanAI-windows-x64
+          path: release/CleanAI-windows-x64.zip
 
       - name: Publish/Update latest GitHub Release
         uses: ncipollo/release-action@v1
@@ -66,7 +116,7 @@ jobs:
             Автоматически собранная последняя версия CleanAI.
 
             Commit: ${{ github.sha }}
-          artifacts: release/CleanAI.exe
+          artifacts: release/CleanAI-windows-x64.zip
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
