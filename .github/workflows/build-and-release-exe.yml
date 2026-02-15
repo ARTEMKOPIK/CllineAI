@@ -125,7 +125,7 @@ jobs:
           # NuGet references), so restore failures are treated as non-fatal.
           $solutionPath = "build/CleanAI.sln"
           if (-not (Test-Path $solutionPath)) {
-            $detectedSolutions = Get-ChildItem -Path build -Filter *.sln -File -ErrorAction SilentlyContinue
+            $detectedSolutions = @(Get-ChildItem -Path build -Filter *.sln -File -ErrorAction SilentlyContinue)
             if ($detectedSolutions.Count -eq 1) {
               $solutionPath = $detectedSolutions[0].FullName
               Write-Warning "Using detected solution path: $solutionPath"
