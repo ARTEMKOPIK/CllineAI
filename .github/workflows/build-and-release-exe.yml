@@ -40,12 +40,43 @@ jobs:
           # It is not a vcpkg port, so only install the packages that vcpkg actually provides.
           & "$env:VCPKG_ROOT/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
+      - name: Resolve Microsoft.WindowsAppSDK CMake package path
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path "${env:ProgramFiles(x86)}" "Microsoft Visual Studio/Installer/vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe was not found at expected location: $vswhere"
+          }
+
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $vsPath) {
+            throw "Could not detect a Visual Studio installation path via vswhere.exe"
+          }
+
+          $cmakeExtensionsRoot = Join-Path $vsPath "Common7/IDE/CommonExtensions/Microsoft/CMake/CMakeExtensions"
+          if (-not (Test-Path $cmakeExtensionsRoot)) {
+            throw "CMake extensions path was not found: $cmakeExtensionsRoot"
+          }
+
+          $configPath = Get-ChildItem -Path $cmakeExtensionsRoot -Filter "Microsoft.WindowsAppSDKConfig.cmake" -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $configPath) {
+            throw "Microsoft.WindowsAppSDKConfig.cmake was not found under: $cmakeExtensionsRoot"
+          }
+
+          $windowsAppSdkCmakeDir = Split-Path $configPath -Parent
+          "WINDOWS_APP_SDK_CMAKE_DIR=$windowsAppSdkCmakeDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved Microsoft.WindowsAppSDK_DIR=$windowsAppSdkCmakeDir"
+
       - name: Configure CMake (Release)
         shell: pwsh
         run: |
           cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DMicrosoft.WindowsAppSDK_DIR="$env:WINDOWS_APP_SDK_CMAKE_DIR"
 
       - name: Build CleanAI
         shell: pwsh
