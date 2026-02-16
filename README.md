@@ -25,3 +25,8 @@ WINDOWS_APP_SDK_DIR="<path-to-Microsoft.WindowsAppSDKConfig.cmake-parent>"
 cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake" -DMicrosoft.WindowsAppSDK_DIR="$WINDOWS_APP_SDK_DIR"
 msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 ```
+
+
+### Отладка в CI
+
+При каждом запуске workflow теперь выгружается артефакт `build-debug-logs` (даже при падении), где сохраняются диагностические логи поиска Windows App SDK.
