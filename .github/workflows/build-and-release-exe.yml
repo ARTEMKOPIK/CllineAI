@@ -120,71 +120,78 @@ jobs:
       - name: Build CleanAI
         shell: pwsh
         run: |
-          function Find-UsableBuildDirectory([string]$preferredDir) {
-            $candidateDirs = [System.Collections.Generic.List[string]]::new()
-            if ($preferredDir) {
-              $candidateDirs.Add($preferredDir)
+          function Normalize-NonEmptyString([object]$value) {
+            if ($null -eq $value) {
+              return $null
+            }
+
+            $text = [string]$value
+            if ([string]::IsNullOrWhiteSpace($text)) {
+              return $null
+            }
+
+            return $text.Trim()
+          }
+
+          function Get-CmakeCacheValue([string]$cachePath, [string]$key) {
+            if (-not (Test-Path $cachePath)) {
+              return $null
+            }
+
+            $entry = Get-Content $cachePath |
+              Where-Object { $_ -match "^$([regex]::Escape($key))(:[^=]*)?=" } |
+              Select-Object -First 1
+
+            if (-not $entry) {
+              return $null
+            }
+
+            $parts = $entry -split '=', 2
+            if ($parts.Length -lt 2) {
+              return $null
+            }
+
+            return Normalize-NonEmptyString $parts[1]
+          }
+
+          function Find-BuildDirectory([string]$preferredDir) {
+            $candidates = [System.Collections.Generic.List[string]]::new()
+            if ($preferredDir -and (Test-Path $preferredDir)) {
+              $candidates.Add($preferredDir)
             }
 
             $detectedCaches = @(Get-ChildItem -Path . -Filter CMakeCache.txt -File -Recurse -ErrorAction SilentlyContinue)
             foreach ($cache in $detectedCaches) {
-              $candidateDirs.Add((Split-Path -Path $cache.FullName -Parent))
+              $candidates.Add((Split-Path -Path $cache.FullName -Parent))
             }
 
-            $uniqueCandidateDirs = $candidateDirs |
-              Where-Object { $_ -and (Test-Path $_) } |
-              Select-Object -Unique
+            $uniqueCandidates = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
-            foreach ($dir in $uniqueCandidateDirs) {
-              $hasNinja = Test-Path (Join-Path $dir "build.ninja")
-              $hasSln = @(Get-ChildItem -Path $dir -Filter *.sln -File -ErrorAction SilentlyContinue).Count -gt 0
-              $hasVcxproj = @(Get-ChildItem -Path $dir -Filter *.vcxproj -File -ErrorAction SilentlyContinue).Count -gt 0
-
-              if ($hasNinja -or $hasSln -or $hasVcxproj) {
+            foreach ($dir in $uniqueCandidates) {
+              if (Test-Path (Join-Path $dir "build.ninja")) {
                 return $dir
               }
+
+              $hasSln = @(Get-ChildItem -Path $dir -Filter *.sln -File -ErrorAction SilentlyContinue).Count -gt 0
+              $hasVcxproj = @(Get-ChildItem -Path $dir -Filter *.vcxproj -File -ErrorAction SilentlyContinue).Count -gt 0
+              if ($hasSln -or $hasVcxproj) {
+                return $dir
+              }
+            }
+
+            if ($detectedCaches.Count -eq 1) {
+              return (Split-Path -Path $detectedCaches[0].FullName -Parent)
             }
 
             return $null
           }
 
-          $buildDir = "build"
-          $cachePath = Join-Path $buildDir "CMakeCache.txt"
-
-          if (-not (Test-Path $cachePath)) {
-            $detectedCaches = @(Get-ChildItem -Path . -Filter CMakeCache.txt -File -Recurse -ErrorAction SilentlyContinue)
-            if ($detectedCaches.Count -eq 1) {
-              $buildDir = Split-Path -Path $detectedCaches[0].FullName -Parent
-              $cachePath = $detectedCaches[0].FullName
-              Write-Warning "Expected build/CMakeCache.txt not found. Using detected build directory: $buildDir"
-            }
-            elseif ($detectedCaches.Count -gt 1) {
-              $locations = $detectedCaches | ForEach-Object { $_.FullName }
-              throw "Unable to determine build directory. Found multiple CMake caches: $($locations -join '; ')"
-            }
-            else {
-              throw "CMake cache was not generated. Configure step likely failed before build stage."
-            }
-          }
-
-          $usableBuildDir = Find-UsableBuildDirectory -preferredDir $buildDir
-          if ($usableBuildDir -and $usableBuildDir -ne $buildDir) {
-            Write-Warning "Selected a more usable CMake build directory: $usableBuildDir (instead of $buildDir)"
-            $buildDir = $usableBuildDir
-            $cachePath = Join-Path $buildDir "CMakeCache.txt"
-          }
-
-          $generator = (Get-Content $cachePath | Where-Object { $_ -like 'CMAKE_GENERATOR:*' } | Select-Object -First 1)
-          $windowsAppSdkDirEntry = (Get-Content $cachePath | Where-Object { $_ -like 'Microsoft.WindowsAppSDK_DIR:*' } | Select-Object -First 1)
-
-          function Resolve-WindowsAppSdkDir([string]$cacheEntry) {
-            if ($cacheEntry) {
-              $candidateFromCache = ($cacheEntry -split '=', 2)[1]
-              if ($candidateFromCache -and $candidateFromCache -notmatch '(-NOTFOUND)$') {
-                $candidateConfig = Join-Path $candidateFromCache "Microsoft.WindowsAppSDKConfig.cmake"
-                if (Test-Path $candidateConfig) {
-                  return Normalize-NonEmptyString $candidateFromCache
-                }
+          function Resolve-WindowsAppSdkDir([string]$cachePath) {
+            $cacheValue = Get-CmakeCacheValue -cachePath $cachePath -key "Microsoft.WindowsAppSDK_DIR"
+            if ($cacheValue -and $cacheValue -notmatch '(-NOTFOUND)$') {
+              $cacheConfig = Join-Path $cacheValue "Microsoft.WindowsAppSDKConfig.cmake"
+              if (Test-Path $cacheConfig) {
+                return $cacheValue
               }
             }
 
@@ -201,28 +208,10 @@ jobs:
 
               $candidateConfig = @(Get-ChildItem -Path $root -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
               if ($candidateConfig.Count -ge 1) {
-                $resolvedDir = (Split-Path -Path $candidateConfig[0].FullName -Parent)
-                return Normalize-NonEmptyString $resolvedDir
+                return Normalize-NonEmptyString (Split-Path -Path $candidateConfig[0].FullName -Parent)
               }
             }
 
-            return $null
-          }
-
-          function Normalize-NonEmptyString([object]$value) {
-            if ($null -eq $value) {
-              return $null
-            }
-
-            $text = [string]$value
-            if ([string]::IsNullOrWhiteSpace($text)) {
-              return $null
-            }
-
-            return $text.Trim()
-          }
-
-          function Install-AndResolveWindowsAppSdkDirFromNuGet() {
             if (Get-Command nuget -ErrorAction SilentlyContinue) {
               $nuget = "nuget"
             }
@@ -231,19 +220,14 @@ jobs:
               Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
             }
 
-            $windowsAppSdkPackagesDir = Join-Path $env:RUNNER_TEMP "nuget-packages"
-            $candidateVersions = @(
-              "1.7.250401001",
-              "1.6.240923002",
-              "1.5.240607001"
-            )
+            $packagesDir = Join-Path $env:RUNNER_TEMP "nuget-packages"
+            $versions = @("1.7.250401001", "1.6.240923002", "1.5.240607001")
 
-            foreach ($version in $candidateVersions) {
-              Write-Warning "Trying to install Microsoft.WindowsAppSDK $version from NuGet for recovery..."
-
+            foreach ($version in $versions) {
+              Write-Warning "Trying NuGet recovery for Microsoft.WindowsAppSDK $version..."
               & $nuget install Microsoft.WindowsAppSDK `
                 -Version $version `
-                -OutputDirectory $windowsAppSdkPackagesDir `
+                -OutputDirectory $packagesDir `
                 -Source "https://api.nuget.org/v3/index.json" `
                 -NonInteractive
 
@@ -252,16 +236,19 @@ jobs:
                 continue
               }
 
-              $installedPackageRoot = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$version"
-              if (-not (Test-Path $installedPackageRoot)) {
-                $installedPackageRoot = Join-Path $windowsAppSdkPackagesDir "microsoft.windowsappsdk.$version"
-              }
+              $packageRoots = @(
+                (Join-Path $packagesDir "Microsoft.WindowsAppSDK.$version"),
+                (Join-Path $packagesDir "microsoft.windowsappsdk.$version")
+              )
 
-              if (Test-Path $installedPackageRoot) {
-                $candidateConfig = @(Get-ChildItem -Path $installedPackageRoot -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
+              foreach ($packageRoot in $packageRoots) {
+                if (-not (Test-Path $packageRoot)) {
+                  continue
+                }
+
+                $candidateConfig = @(Get-ChildItem -Path $packageRoot -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
                 if ($candidateConfig.Count -ge 1) {
-                  $resolvedDir = (Split-Path -Path $candidateConfig[0].FullName -Parent)
-                  return Normalize-NonEmptyString $resolvedDir
+                  return Normalize-NonEmptyString (Split-Path -Path $candidateConfig[0].FullName -Parent)
                 }
               }
             }
@@ -269,136 +256,81 @@ jobs:
             return $null
           }
 
-          $resolvedWindowsAppSdkDir = Normalize-NonEmptyString (Resolve-WindowsAppSdkDir -cacheEntry $windowsAppSdkDirEntry)
+          $buildDir = Find-BuildDirectory -preferredDir "build"
+          if (-not $buildDir) {
+            throw "Unable to determine CMake build directory. Configure step may have failed."
+          }
+
+          $cachePath = Join-Path $buildDir "CMakeCache.txt"
+          if (-not (Test-Path $cachePath)) {
+            throw "CMake cache not found at '$cachePath'. Configure step likely failed."
+          }
+
+          $generator = Get-CmakeCacheValue -cachePath $cachePath -key "CMAKE_GENERATOR"
+          $isVisualStudioGenerator = $generator -and $generator -match 'Visual Studio'
+          $resolvedWindowsAppSdkDir = Resolve-WindowsAppSdkDir -cachePath $cachePath
+
           Write-Host "Using build directory: $buildDir"
-          if ($generator) {
-            Write-Host "Detected CMake generator: $generator"
-          }
-
-          if ($windowsAppSdkDirEntry) {
-            Write-Host "Detected Microsoft.WindowsAppSDK_DIR from cache: $windowsAppSdkDirEntry"
-          }
-
+          Write-Host "Detected CMake generator: $generator"
           if ($resolvedWindowsAppSdkDir) {
-            Write-Host "Using Microsoft.WindowsAppSDK_DIR for potential reconfigure: $resolvedWindowsAppSdkDir"
+            Write-Host "Resolved Microsoft.WindowsAppSDK_DIR: $resolvedWindowsAppSdkDir"
           }
           else {
-            Write-Warning "Unable to resolve a usable Microsoft.WindowsAppSDK_DIR for reconfigure. Continuing without explicit override."
+            Write-Warning "Microsoft.WindowsAppSDK_DIR could not be resolved from cache/fallback/NuGet."
           }
 
-          $rootSolutions = @()
-          $rootProjects = @()
-          $hasNinjaBuildFile = Test-Path (Join-Path $buildDir "build.ninja")
-
-          # Best-effort restore for Visual Studio generators.
-          # This must not fail the pipeline because CMake can still build native targets
-          # even when no .sln is generated (or when Restore target is unavailable).
-          $isVisualStudioGenerator = $generator -and $generator -match 'Visual Studio'
           if ($isVisualStudioGenerator) {
             $rootSolutions = @(Get-ChildItem -Path $buildDir -Filter *.sln -File -ErrorAction SilentlyContinue)
             $rootProjects = @(Get-ChildItem -Path $buildDir -Filter *.vcxproj -File -ErrorAction SilentlyContinue)
 
-            if (($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) -and $hasNinjaBuildFile) {
-              Write-Warning "CMake cache reports a Visual Studio generator, but build.ninja exists and no top-level VS project files were found. Treating this as a non-Visual-Studio build directory."
+            if (($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) -and (Test-Path (Join-Path $buildDir "build.ninja"))) {
+              Write-Warning "Visual Studio generator in cache, but Ninja build tree detected. Switching to non-Visual-Studio mode."
               $isVisualStudioGenerator = $false
             }
           }
 
-          $msbuild = if ($isVisualStudioGenerator) { Get-Command msbuild -ErrorAction SilentlyContinue } else { $null }
-          if ($msbuild) {
-            $detectedSolutions = @(Get-ChildItem -Path $buildDir -Filter *.sln -File -Recurse -ErrorAction SilentlyContinue)
-            if ($detectedSolutions.Count -ge 1) {
-              $solutionPath = $detectedSolutions[0].FullName
-              if ($detectedSolutions.Count -gt 1) {
-                Write-Warning "Multiple .sln files detected under $buildDir. Using first: $solutionPath"
-              }
-
-              & $msbuild.Source $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
-              if ($LASTEXITCODE -ne 0) {
-                Write-Warning "MSBuild restore failed with exit code $LASTEXITCODE. Continuing because Restore may be unavailable for this generated native solution."
-              }
-            }
-            else {
-              Write-Warning "No .sln file found under $buildDir. Skipping MSBuild restore and continuing with CMake build."
-            }
-          }
-          elseif ($isVisualStudioGenerator) {
-            Write-Warning "MSBuild is not available in PATH after MSVC setup. Skipping explicit restore and continuing with CMake build."
-          }
-          else {
-            Write-Host "Non-Visual-Studio generator detected. Skipping MSBuild restore step."
-          }
-
           if ($isVisualStudioGenerator) {
-            # A successful Visual Studio configure should generate a top-level solution and
-            # at least one root .vcxproj (typically ALL_BUILD.vcxproj / ZERO_CHECK.vcxproj).
-            # Checking only recursively can produce false positives from nested dependency files.
+            $rootSolutions = @(Get-ChildItem -Path $buildDir -Filter *.sln -File -ErrorAction SilentlyContinue)
+            $rootProjects = @(Get-ChildItem -Path $buildDir -Filter *.vcxproj -File -ErrorAction SilentlyContinue)
+
             if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
-              Write-Warning "Visual Studio generator was detected, but top-level solution/project files are missing in '$buildDir'."
-
-              if (-not $resolvedWindowsAppSdkDir) {
-                Write-Warning "Microsoft.WindowsAppSDK_DIR is unresolved in this step. Attempting NuGet recovery for reconfigure..."
-                $resolvedWindowsAppSdkDir = Normalize-NonEmptyString (Install-AndResolveWindowsAppSdkDirFromNuGet)
-              }
-
               if ($resolvedWindowsAppSdkDir) {
-                Write-Warning "Re-running configure step before build to recover missing Visual Studio files..."
+                Write-Warning "Missing top-level VS files. Reconfiguring build tree from scratch..."
 
-                $resolvedConfig = Join-Path $resolvedWindowsAppSdkDir "Microsoft.WindowsAppSDKConfig.cmake"
-                if (-not (Test-Path $resolvedConfig)) {
-                  Write-Warning "Resolved Microsoft.WindowsAppSDK_DIR is invalid: $resolvedWindowsAppSdkDir"
-                  $resolvedWindowsAppSdkDir = $null
-                }
-              }
-
-              if ($resolvedWindowsAppSdkDir) {
                 Remove-Item -Path $buildDir -Recurse -Force -ErrorAction SilentlyContinue
+                & cmake -S cleanai -B $buildDir -G "Visual Studio 17 2022" -A x64 `
+                  -DCMAKE_BUILD_TYPE=Release `
+                  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+                  -DMicrosoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkDir
 
-                $reconfigureArgs = @(
-                  "-DCMAKE_BUILD_TYPE=Release",
-                  "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake",
-                  "-DMicrosoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkDir"
-                )
-
-                & cmake -S cleanai -B $buildDir -G "Visual Studio 17 2022" -A x64 @reconfigureArgs
-                if ($LASTEXITCODE -eq 0) {
-                  $rootSolutions = @(Get-ChildItem -Path $buildDir -Filter *.sln -File -ErrorAction SilentlyContinue)
-                  $rootProjects = @(Get-ChildItem -Path $buildDir -Filter *.vcxproj -File -ErrorAction SilentlyContinue)
-                  if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
-                    Write-Warning "CMake reconfigure completed, but top-level Visual Studio files are still missing in '$buildDir'."
-                  }
-                  else {
-                    Write-Host "Recovered Visual Studio project files after reconfigure."
-                  }
-                }
-                else {
+                if ($LASTEXITCODE -ne 0) {
                   throw "CMake reconfigure failed while recovering Visual Studio project files in '$buildDir'."
                 }
-              }
-              else {
-                Write-Warning "Unable to resolve Microsoft.WindowsAppSDK_DIR even after NuGet recovery. Skipping reconfigure to avoid masking configure-stage diagnostics."
+
+                $rootSolutions = @(Get-ChildItem -Path $buildDir -Filter *.sln -File -ErrorAction SilentlyContinue)
+                $rootProjects = @(Get-ChildItem -Path $buildDir -Filter *.vcxproj -File -ErrorAction SilentlyContinue)
               }
 
               if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
-                if (Test-Path (Join-Path $buildDir "build.ninja")) {
-                  Write-Warning "No top-level Visual Studio files were generated, but build.ninja exists. Treating this as a non-Visual-Studio build directory."
-                  $isVisualStudioGenerator = $false
-                }
-                else {
-                  throw "Top-level Visual Studio files are missing in '$buildDir'. Configure stage did not produce a usable Visual Studio build tree."
-                }
+                throw "Visual Studio generator is selected, but top-level .sln/.vcxproj are missing in '$buildDir'."
+              }
+            }
+
+            $msbuild = Get-Command msbuild -ErrorAction SilentlyContinue
+            if ($msbuild -and $rootSolutions.Count -ge 1) {
+              & $msbuild.Source $rootSolutions[0].FullName /t:Restore /p:Configuration=Release /p:Platform=x64 /m
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "MSBuild restore failed with code $LASTEXITCODE. Continuing with CMake build."
               }
             }
           }
 
-          # Build all default targets first because this works across all generators,
-          # then optionally retry a direct target build for Visual Studio solutions.
           cmake --build $buildDir --config Release --parallel
           if ($LASTEXITCODE -ne 0 -and $isVisualStudioGenerator) {
-            Write-Warning "Default build failed with exit code $LASTEXITCODE. Retrying explicit target 'CleanAI'..."
+            Write-Warning "Default build failed with code $LASTEXITCODE. Retrying target 'CleanAI'..."
             cmake --build $buildDir --config Release --target CleanAI --parallel
             if ($LASTEXITCODE -ne 0) {
-              throw "CMake build failed for both default solution targets and explicit target 'CleanAI'."
+              throw "CMake build failed for both default targets and explicit target 'CleanAI'."
             }
           }
           elseif ($LASTEXITCODE -ne 0) {
