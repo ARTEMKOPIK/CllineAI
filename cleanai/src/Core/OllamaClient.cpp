@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+#include <winrt/base.h>
 
 namespace
 {
@@ -137,7 +138,7 @@ namespace
                     return false;
                 }
 
-                auto name = model[U("name")].as_string();
+                auto name = model.at(U("name")).as_string();
                 return name.find(U("tinyllama")) != utility::string_t::npos;
             });
 
@@ -149,7 +150,7 @@ namespace
         catch (...)
         {
             // Не блокируем именно загрузку модели: на этапе классификации это даст fallback на Ask.
-            // Важно: ошибки установки/запуска Ollama в EnsureServerAvailableAsync по-прежнему приводят к исключению.
+            // Важно: ошибки установки/запуска Ollama в EnsureServerAvailable по-прежнему приводят к исключению.
         }
     }
 }
@@ -160,14 +161,12 @@ namespace CleanAI::Core
 
     OllamaClient::OllamaClient(utility::string_t baseUrl) : m_client(std::move(baseUrl)) {}
 
-    winrt::Windows::Foundation::IAsyncAction OllamaClient::EnsureServerAvailableAsync()
+    void OllamaClient::EnsureServerAvailable()
     {
-        co_await winrt::resume_background();
-
         if (IsServerAvailable(m_client))
         {
             EnsureModelReady(m_client);
-            co_return;
+            return;
         }
 
         if (!IsOllamaInstalled())
@@ -192,10 +191,8 @@ namespace CleanAI::Core
         EnsureModelReady(m_client);
     }
 
-    winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::Recommendation>> OllamaClient::ClassifyBatchAsync(std::vector<Models::FileItem> const& files)
+    std::vector<Models::Recommendation> OllamaClient::ClassifyBatch(std::vector<Models::FileItem> const& files)
     {
-        co_await winrt::resume_background();
-
         std::vector<Models::Recommendation> result;
         result.reserve(files.size());
 
@@ -242,6 +239,6 @@ namespace CleanAI::Core
             result.push_back(std::move(recommendation));
         }
 
-        co_return result;
+        return result;
     }
 }

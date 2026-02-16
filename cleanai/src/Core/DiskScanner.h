@@ -5,7 +5,6 @@
 #include <functional>
 #include <mutex>
 #include <vector>
-#include <winrt/Windows.Foundation.h>
 
 namespace CleanAI::Core
 {
@@ -21,7 +20,7 @@ namespace CleanAI::Core
     public:
         using ProgressCallback = std::function<void(ScanProgress const&)>;
 
-        winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::FileItem>> ScanAsync(std::wstring root, ProgressCallback callback);
+        std::vector<Models::FileItem> Scan(std::wstring const& root, ProgressCallback callback);
         static std::vector<std::wstring> DetectLocalDrives();
 
     public:
