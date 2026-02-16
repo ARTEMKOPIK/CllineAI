@@ -208,6 +208,46 @@ jobs:
             return $null
           }
 
+          function Install-AndResolveWindowsAppSdkDirFromNuGet() {
+            if (Get-Command nuget -ErrorAction SilentlyContinue) {
+              $nuget = "nuget"
+            }
+            else {
+              $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+              Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+            }
+
+            $windowsAppSdkPackagesDir = Join-Path $env:RUNNER_TEMP "nuget-packages"
+            $candidateVersions = @(
+              "1.7.250401001",
+              "1.6.240923002",
+              "1.5.240607001"
+            )
+
+            foreach ($version in $candidateVersions) {
+              Write-Warning "Trying to install Microsoft.WindowsAppSDK $version from NuGet for recovery..."
+
+              & $nuget install Microsoft.WindowsAppSDK `
+                -Version $version `
+                -OutputDirectory $windowsAppSdkPackagesDir `
+                -Source "https://api.nuget.org/v3/index.json" `
+                -NonInteractive
+
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "NuGet install failed for Microsoft.WindowsAppSDK $version"
+                continue
+              }
+
+              $candidateDir = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$version/build/native"
+              $candidateConfig = Join-Path $candidateDir "Microsoft.WindowsAppSDKConfig.cmake"
+              if (Test-Path $candidateConfig) {
+                return $candidateDir
+              }
+            }
+
+            return $null
+          }
+
           $resolvedWindowsAppSdkDir = Resolve-WindowsAppSdkDir -cacheEntry $windowsAppSdkDirEntry
           Write-Host "Using build directory: $buildDir"
           if ($generator) {
@@ -275,6 +315,11 @@ jobs:
             if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
               Write-Warning "Visual Studio generator was detected, but top-level solution/project files are missing in '$buildDir'."
 
+              if (-not $resolvedWindowsAppSdkDir) {
+                Write-Warning "Microsoft.WindowsAppSDK_DIR is unresolved in this step. Attempting NuGet recovery for reconfigure..."
+                $resolvedWindowsAppSdkDir = Install-AndResolveWindowsAppSdkDirFromNuGet
+              }
+
               if ($resolvedWindowsAppSdkDir) {
                 Write-Warning "Re-running configure step before build to recover missing Visual Studio files..."
 
@@ -300,7 +345,7 @@ jobs:
                 }
               }
               else {
-                Write-Warning "Microsoft.WindowsAppSDK_DIR is unresolved in this step; skipping reconfigure to avoid introducing a new configure failure."
+                Write-Warning "Unable to resolve Microsoft.WindowsAppSDK_DIR even after NuGet recovery. Skipping reconfigure to avoid masking configure-stage diagnostics."
               }
 
               if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
@@ -308,11 +353,8 @@ jobs:
                   Write-Warning "No top-level Visual Studio files were generated, but build.ninja exists. Treating this as a non-Visual-Studio build directory."
                   $isVisualStudioGenerator = $false
                 }
-                elseif (-not $resolvedWindowsAppSdkDir) {
-                  throw "Top-level Visual Studio files are missing in '$buildDir', and Microsoft.WindowsAppSDK_DIR could not be resolved for a safe reconfigure. Failing early; check the configure step logs."
-                }
                 else {
-                  throw "Top-level Visual Studio files are still missing in '$buildDir' after reconfigure. Configure stage likely succeeded incompletely; stopping before cmake --build."
+                  throw "Top-level Visual Studio files are missing in '$buildDir'. Configure stage did not produce a usable Visual Studio build tree."
                 }
               }
             }
