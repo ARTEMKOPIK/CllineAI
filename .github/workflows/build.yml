@@ -101,9 +101,16 @@ jobs:
           CleanAI for Windows x64
 
           1) Распакуйте архив полностью.
-          2) Запустите CleanAI.exe из папки CleanAI-win64.
-          3) Не запускайте CleanAI.CoreLogicTests.exe — это служебная проверка, а не приложение.
+          2) Откройте папку CleanAI-win64.
+          3) Запустите Start-CleanAI.bat (или CleanAI.exe).
+          4) Не запускайте CleanAI.CoreLogicTests.exe — это служебная проверка, а не приложение.
           "@ | Set-Content -Path "release/CleanAI-win64/README.txt" -Encoding UTF8
+          @"
+          @echo off
+          cd /d %~dp0
+          start "" CleanAI.exe
+          "@ | Set-Content -Path "release/CleanAI-win64/Start-CleanAI.bat" -Encoding ASCII
+
           Compress-Archive -Path "release/CleanAI-win64/*" -DestinationPath "release/CleanAI-win64.zip" -Force
 
       - name: Upload headless diagnostic binary
@@ -126,7 +133,7 @@ jobs:
         if: steps.flavor.outputs.mode == 'winui'
         uses: actions/upload-artifact@v4
         with:
-          name: CleanAI-win64
+          name: CleanAI-win64-full-app
           path: |
             release/CleanAI-win64.zip
 
