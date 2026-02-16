@@ -1,5 +1,7 @@
 #include "DiskScanner.h"
 
+#include <algorithm>
+#include <cwctype>
 #include <filesystem>
 #include <windows.h>
 
@@ -7,6 +9,18 @@ using namespace std::chrono_literals;
 
 namespace CleanAI::Core
 {
+    namespace
+    {
+        std::wstring ToLower(std::wstring value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
+            {
+                return static_cast<wchar_t>(std::towlower(ch));
+            });
+            return value;
+        }
+    }
+
     winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::FileItem>> DiskScanner::ScanAsync(std::wstring root, ProgressCallback callback)
     {
         co_await winrt::resume_background();
@@ -85,18 +99,25 @@ namespace CleanAI::Core
 
     bool DiskScanner::ShouldSkipDirectory(std::wstring const& path) const
     {
-        static constexpr std::wstring_view blocked[] = {
-            L"$Recycle.Bin",
-            L"System Volume Information",
-            L"Windows",
-            L"Program Files"
+        static const std::wstring blocked[] = {
+            ToLower(L"$Recycle.Bin"),
+            ToLower(L"System Volume Information"),
+            ToLower(L"Windows"),
+            ToLower(L"Program Files")
         };
 
-        for (auto const& item : blocked)
+        std::filesystem::path const currentPath{ path };
+
+        for (auto const& segment : currentPath)
         {
-            if (path.find(item) != std::wstring::npos)
+            auto const normalizedSegment = ToLower(segment.wstring());
+
+            for (auto const& item : blocked)
             {
-                return true;
+                if (normalizedSegment == item)
+                {
+                    return true;
+                }
             }
         }
 
