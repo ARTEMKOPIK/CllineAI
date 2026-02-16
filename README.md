@@ -1,14 +1,24 @@
 # CllineAI
 
-## Автосборка и автопубликация Windows-сборки
+## Windows CI (упрощённый стек)
 
-В репозиторий добавлен GitHub Actions workflow `.github/workflows/build-and-release-exe.yml`.
+Проект переведён на максимально простой CI-пайплайн в `.github/workflows/build.yml`:
 
-Что происходит автоматически:
-- при каждом `push` в `main/master` (и при ручном запуске) GitHub собирает проект в режиме `Release`;
-- формируется дистрибутив `CleanAI-windows-x64.zip`, который содержит `CleanAI.exe` и необходимые runtime-зависимости (`.dll`);
-- архив загружается в workflow artifacts;
-- этот же архив публикуется/обновляется в GitHub Release с тегом `latest`.
+- без CMake;
+- без NuGet-резолва Windows App SDK;
+- без кастомного PowerShell-парсинга вывода команд;
+- с прямым `msbuild` вызовом решения.
 
-То есть после каждого обновления кода вы получаете актуальную portable-сборку для запуска на «чистой» Windows-машине без ручной докомплектации библиотек.
+### Что важно
 
+Текущая схема требует **статический файл решения** в репозитории:
+
+- `cleanai/CleanAI.sln`
+
+Если его нет, workflow завершится с явной ошибкой и подсказкой, что нужно закоммитить `.sln/.vcxproj`.
+
+### Одна команда для сборки
+
+```powershell
+msbuild cleanai/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
+```
