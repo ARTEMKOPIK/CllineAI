@@ -15,14 +15,14 @@ namespace CleanAI::Core
         ScanProgress progress{};
         auto lastUpdate = std::chrono::steady_clock::now();
 
-        try
-        {
-            auto iterator = std::filesystem::recursive_directory_iterator(
-                root,
-                std::filesystem::directory_options::skip_permission_denied);
+        auto iterator = std::filesystem::recursive_directory_iterator(
+            root,
+            std::filesystem::directory_options::skip_permission_denied);
 
-            auto end = std::filesystem::recursive_directory_iterator();
-            for (; iterator != end; ++iterator)
+        auto end = std::filesystem::recursive_directory_iterator();
+        for (; iterator != end; ++iterator)
+        {
+            try
             {
                 auto const& entry = *iterator;
 
@@ -54,10 +54,12 @@ namespace CleanAI::Core
                     lastUpdate = std::chrono::steady_clock::now();
                 }
             }
-        }
-        catch (...)
-        {
-            // Пропускаем недоступные папки/файлы, приложение продолжает работу.
+            catch (...)
+            {
+                // Пропускаем недоступные или удалённые в процессе сканирования элементы,
+                // но продолжаем сканирование остальных файлов.
+                continue;
+            }
         }
 
         callback(progress);
