@@ -20,7 +20,8 @@ namespace CleanAI::Pages
         auto combo = FindName(L"DriveCombo").as<winrt::Microsoft::UI::Xaml::Controls::ComboBox>();
         if (!combo.SelectedItem()) co_return;
 
-        auto root = winrt::unbox_value<winrt::hstring>(combo.SelectedItem()).c_str();
+        auto selectedDrive = winrt::unbox_value<winrt::hstring>(combo.SelectedItem());
+        std::wstring root = selectedDrive.c_str();
 
         auto files = co_await m_scanner->ScanAsync(root, [this](Core::ScanProgress const& progress)
         {
