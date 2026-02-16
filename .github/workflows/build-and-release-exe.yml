@@ -140,9 +140,14 @@ jobs:
           }
 
           $generator = (Get-Content $cachePath | Where-Object { $_ -like 'CMAKE_GENERATOR:*' } | Select-Object -First 1)
+          $windowsAppSdkDirEntry = (Get-Content $cachePath | Where-Object { $_ -like 'Microsoft.WindowsAppSDK_DIR:*' } | Select-Object -First 1)
           Write-Host "Using build directory: $buildDir"
           if ($generator) {
             Write-Host "Detected CMake generator: $generator"
+          }
+
+          if ($windowsAppSdkDirEntry) {
+            Write-Host "Detected Microsoft.WindowsAppSDK_DIR from cache: $windowsAppSdkDirEntry"
           }
 
           # Best-effort restore for Visual Studio generators.
@@ -172,6 +177,37 @@ jobs:
           }
           else {
             Write-Host "Non-Visual-Studio generator detected. Skipping MSBuild restore step."
+          }
+
+          if ($isVisualStudioGenerator) {
+            $generatedProjects = @(Get-ChildItem -Path $buildDir -Filter *.vcxproj -File -Recurse -ErrorAction SilentlyContinue)
+            if ($generatedProjects.Count -eq 0) {
+              Write-Warning "Visual Studio generator was detected, but no .vcxproj files were generated. Re-running configure step before build..."
+
+              $reconfigureArgs = @(
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+              )
+
+              if ($windowsAppSdkDirEntry) {
+                $resolvedWindowsAppSdkDir = ($windowsAppSdkDirEntry -split '=', 2)[1]
+                if ($resolvedWindowsAppSdkDir) {
+                  $reconfigureArgs += "-DMicrosoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkDir"
+                }
+              }
+
+              & cmake -S cleanai -B $buildDir -G "Visual Studio 17 2022" -A x64 @reconfigureArgs
+              if ($LASTEXITCODE -ne 0) {
+                throw "CMake reconfigure failed while recovering missing Visual Studio project files in '$buildDir'."
+              }
+
+              $generatedProjects = @(Get-ChildItem -Path $buildDir -Filter *.vcxproj -File -Recurse -ErrorAction SilentlyContinue)
+              if ($generatedProjects.Count -eq 0) {
+                throw "CMake configure completed but generated no .vcxproj files in '$buildDir'."
+              }
+
+              Write-Host "Recovered Visual Studio project files after reconfigure."
+            }
           }
 
           # Build all default targets first because this works across all generators,
