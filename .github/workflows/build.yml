@@ -18,39 +18,17 @@ jobs:
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Debug runner environment (Windows App SDK)
+      - name: Debug runner environment
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path build-logs -Force | Out-Null
-
-          "=== Tool versions ===" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          (Get-Command cmake -ErrorAction SilentlyContinue | Format-List | Out-String) | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          (Get-Command msbuild -ErrorAction SilentlyContinue | Format-List | Out-String) | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-
-          "=== Key env vars ===" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          "VCPKG_ROOT=$env:VCPKG_ROOT" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          "VSINSTALLDIR=$env:VSINSTALLDIR" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          "WindowsSdkDir=$env:WindowsSdkDir" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-
-          "=== Candidate roots existence ===" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          $roots = @(
-            "C:/Program Files (x86)/Microsoft SDKs/Windows App SDK",
-            "C:/Program Files (x86)/Windows Kits",
-            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise",
-            "C:/Program Files/Microsoft Visual Studio/2022/Professional",
-            "C:/Program Files/Microsoft Visual Studio/2022/Community"
-          )
-
-          foreach ($root in $roots) {
-            "{0} => {1}" -f $root, (Test-Path $root) | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          }
-
-          "=== Quick search for *windowsappsdk* (top 50) ===" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          Get-ChildItem -Path "C:/Program Files" -Filter "*windowsappsdk*" -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 50 FullName |
-            Format-Table -AutoSize |
-            Out-String |
-            Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
+          "=== Tool versions ===" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          (Get-Command cmake -ErrorAction SilentlyContinue | Format-List | Out-String) | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          (Get-Command msbuild -ErrorAction SilentlyContinue | Format-List | Out-String) | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "=== Key env vars ===" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "VCPKG_ROOT=$env:VCPKG_ROOT" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "VSINSTALLDIR=$env:VSINSTALLDIR" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "WindowsSdkDir=$env:WindowsSdkDir" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -63,126 +41,10 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP/vcpkg/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
-      - name: Resolve preinstalled Windows App SDK CMake path
-        id: windowsappsdk
+      - name: Generate Visual Studio solution (headless CI mode)
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path build-logs -Force | Out-Null
-
-          $searchRoots = @(
-            "C:/Program Files (x86)/Microsoft SDKs/Windows App SDK",
-            "C:/Program Files (x86)/Windows Kits",
-            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise",
-            "C:/Program Files/Microsoft Visual Studio/2022/Professional",
-            "C:/Program Files/Microsoft Visual Studio/2022/Community"
-          )
-
-          $candidatePatterns = @(
-            "Microsoft.WindowsAppSDKConfig.cmake",
-            "microsoft.windowsappsdk-config.cmake"
-          )
-
-          $config = $null
-          foreach ($root in $searchRoots) {
-            if (-not (Test-Path $root)) {
-              Write-Warning "Skip missing root: $root"
-              continue
-            }
-
-            Write-Host "Searching root: $root"
-            foreach ($pattern in $candidatePatterns) {
-              Write-Host "  Pattern: $pattern"
-              $config = Get-ChildItem -Path $root -Filter $pattern -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($config) {
-                Write-Host "  Found: $($config.FullName)"
-                break
-              }
-            }
-
-            if ($config) {
-              break
-            }
-          }
-
-          if (-not $config) {
-            "Windows App SDK config was not found in preinstalled locations. Dumping nearest matches..." | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-            foreach ($root in $searchRoots) {
-              if (-not (Test-Path $root)) { continue }
-              "Root: $root" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-              Get-ChildItem -Path $root -Filter "*windowsappsdk*.cmake" -File -Recurse -ErrorAction SilentlyContinue |
-                Select-Object -First 50 FullName |
-                Format-Table -AutoSize |
-                Out-String |
-                Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-            }
-
-            "Attempting deterministic NuGet fallback..." | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-
-            if (Get-Command nuget -ErrorAction SilentlyContinue) {
-              $nuget = "nuget"
-            }
-            else {
-              $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
-              Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
-            }
-
-            $nugetPackagesDir = Join-Path $env:RUNNER_TEMP "nuget-packages"
-            $candidateVersions = @(
-              "1.7.250401001",
-              "1.6.240923002",
-              "1.5.240607001"
-            )
-
-            foreach ($version in $candidateVersions) {
-              "Trying Microsoft.WindowsAppSDK $version from NuGet" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-
-              & $nuget install Microsoft.WindowsAppSDK `
-                -Version $version `
-                -OutputDirectory $nugetPackagesDir `
-                -Source "https://api.nuget.org/v3/index.json" `
-                -NonInteractive
-
-              if ($LASTEXITCODE -ne 0) {
-                "NuGet install failed for $version" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-                continue
-              }
-
-              $packageRoots = @(
-                (Join-Path $nugetPackagesDir "Microsoft.WindowsAppSDK.$version"),
-                (Join-Path $nugetPackagesDir "microsoft.windowsappsdk.$version")
-              )
-
-              foreach ($packageRoot in $packageRoots) {
-                if (-not (Test-Path $packageRoot)) { continue }
-
-                foreach ($pattern in $candidatePatterns) {
-                  $config = Get-ChildItem -Path $packageRoot -Filter $pattern -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if ($config) {
-                    "NuGet fallback resolved config: $($config.FullName)" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-                    break
-                  }
-                }
-
-                if ($config) { break }
-              }
-
-              if ($config) { break }
-            }
-          }
-
-          if (-not $config) {
-            throw "Windows App SDK CMake config was not found in preinstalled locations and NuGet fallback failed. See build-debug-logs artifact."
-          }
-
-          $sdkDir = Split-Path -Path $config.FullName -Parent
-          "WINDOWS_APP_SDK_DIR=$sdkDir" >> $env:GITHUB_ENV
-          "Resolved WINDOWS_APP_SDK_DIR=$sdkDir" | Tee-Object -FilePath build-logs/windowsappsdk-debug.txt -Append
-          Write-Host "Resolved WINDOWS_APP_SDK_DIR=$sdkDir"
-
-      - name: Generate Visual Studio solution
-        shell: pwsh
-        run: |
-          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" -DMicrosoft.WindowsAppSDK_DIR="$env:WINDOWS_APP_SDK_DIR"
+          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCLEANAI_HEADLESS_CI=ON
 
       - name: Build solution
         shell: pwsh

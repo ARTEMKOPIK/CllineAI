@@ -9,6 +9,8 @@ if(NOT WIN32)
     message(FATAL_ERROR "CleanAI поддерживает только Windows 11 22H2+")
 endif()
 
+option(CLEANAI_HEADLESS_CI "Build headless CI stub instead of WinUI app" OFF)
+
 add_compile_definitions(
     UNICODE
     _UNICODE
@@ -16,11 +18,23 @@ add_compile_definitions(
     WIN32_LEAN_AND_MEAN
 )
 
-set(WINDOWS_APP_SDK_VERSION "1.5")
-
-find_package(Microsoft.WindowsAppSDK REQUIRED CONFIG)
 find_package(cpprestsdk REQUIRED)
 find_package(SQLite3 REQUIRED)
+
+if(CLEANAI_HEADLESS_CI)
+    add_executable(CleanAI src/ci_main.cpp)
+
+    target_link_libraries(CleanAI PRIVATE
+        cpprestsdk::cpprest
+        SQLite::SQLite3
+    )
+
+    install(TARGETS CleanAI RUNTIME DESTINATION .)
+    return()
+endif()
+
+set(WINDOWS_APP_SDK_VERSION "1.5")
+find_package(Microsoft.WindowsAppSDK REQUIRED CONFIG)
 
 set(CLEANAI_SOURCES
     src/main.cpp
