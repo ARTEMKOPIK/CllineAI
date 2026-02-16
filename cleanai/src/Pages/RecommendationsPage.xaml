@@ -16,30 +16,14 @@
 
         <TabView Grid.Row="1">
             <TabViewItem Header="Можно удалить">
-                <ListView IsItemClickEnabled="True">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Padding="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="cache_very_long_filename_that_will_be_trimmed..."/>
-                                    <TextBlock Text="Кэш Chrome, не использовался 120 дней" Opacity="0.8"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                    <Button Content="Удалить" Background="#ef4444"/>
-                                    <Button Content="Проверить" Background="#f59e0b"/>
-                                    <Button Content="Оставить" Background="#64748b"/>
-                                </StackPanel>
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
+                <ListView x:Name="DeleteList" IsItemClickEnabled="False"/>
             </TabViewItem>
-            <TabViewItem Header="Спросить"/>
-            <TabViewItem Header="Оставить"/>
+            <TabViewItem Header="Спросить">
+                <ListView x:Name="AskList" IsItemClickEnabled="False"/>
+            </TabViewItem>
+            <TabViewItem Header="Оставить">
+                <ListView x:Name="KeepList" IsItemClickEnabled="False"/>
+            </TabViewItem>
         </TabView>
     </Grid>
 </Page>

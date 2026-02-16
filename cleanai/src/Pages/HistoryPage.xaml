@@ -12,17 +12,6 @@
             <TextBlock Text="История действий" FontSize="24" FontWeight="SemiBold"/>
             <Button Content="Экспортировать" Click="OnExport" Background="#6366f1"/>
         </StackPanel>
-        <ListView Grid.Row="1">
-            <ListViewItem>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="15.02.2026 14:30 | C:\Temp\file.bin | Удалён"/>
-                    <Button Grid.Column="1" Content="Восстановить" Background="#64748b"/>
-                </Grid>
-            </ListViewItem>
-        </ListView>
+        <ListView x:Name="HistoryList" Grid.Row="1"/>
     </Grid>
 </Page>

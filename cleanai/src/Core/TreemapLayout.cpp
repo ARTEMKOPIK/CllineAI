@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <limits>
 
 namespace CleanAI::Core
 {
@@ -18,32 +19,144 @@ namespace CleanAI::Core
     std::vector<Rect> TreemapLayout::BuildSquarified(std::vector<Models::FileItem> const& files, double width, double height) const
     {
         std::vector<Rect> result;
-        if (files.empty() || width <= 0 || height <= 0) return result;
+        if (files.empty() || width <= 0 || height <= 0)
+        {
+            return result;
+        }
 
         std::vector<Models::FileItem> sorted = files;
-        std::ranges::sort(sorted, [](auto const& a, auto const& b) { return a.sizeBytes > b.sizeBytes; });
+        std::ranges::sort(sorted, [](auto const& a, auto const& b)
+        {
+            return a.sizeBytes > b.sizeBytes;
+        });
 
         double total = 0.0;
-        for (auto const& f : sorted) total += static_cast<double>(f.sizeBytes);
-
-        double x = 0, y = 0, w = width, h = height;
         for (auto const& file : sorted)
         {
-            double ratio = static_cast<double>(file.sizeBytes) / total;
-            double area = ratio * width * height;
-            double rw = std::max(8.0, std::sqrt(area));
-            double rh = std::max(8.0, area / rw);
+            total += static_cast<double>(file.sizeBytes);
+        }
 
-            if (x + rw > width)
+        if (total <= 0.0)
+        {
+            return result;
+        }
+
+        struct WeightedFile
+        {
+            Models::FileItem file;
+            double area{};
+        };
+
+        std::vector<WeightedFile> weighted;
+        weighted.reserve(sorted.size());
+        auto const totalArea = width * height;
+
+        for (auto const& file : sorted)
+        {
+            auto area = (static_cast<double>(file.sizeBytes) / total) * totalArea;
+            if (area > 0.0)
             {
-                x = 0;
-                y += rh;
+                weighted.push_back(WeightedFile{file, area});
+            }
+        }
+
+        if (weighted.empty())
+        {
+            return result;
+        }
+
+        double left = 0.0;
+        double top = 0.0;
+        double remainingWidth = width;
+        double remainingHeight = height;
+
+        std::vector<WeightedFile> row;
+        std::vector<double> rowAreas;
+        auto index = size_t{0};
+
+        auto flushRow = [&](bool horizontal)
+        {
+            if (row.empty())
+            {
+                return;
             }
 
-            if (y + rh > height) break;
+            auto rowTotalArea = std::accumulate(rowAreas.begin(), rowAreas.end(), 0.0);
+            if (rowTotalArea <= 0.0)
+            {
+                row.clear();
+                rowAreas.clear();
+                return;
+            }
 
-            result.push_back(Rect{ x, y, rw, rh, file });
-            x += rw;
+            if (horizontal)
+            {
+                auto rowHeight = rowTotalArea / remainingWidth;
+                double cursorX = left;
+                for (auto const& item : row)
+                {
+                    auto rectWidth = item.area / rowHeight;
+                    result.push_back(Rect{cursorX, top, rectWidth, rowHeight, item.file});
+                    cursorX += rectWidth;
+                }
+
+                top += rowHeight;
+                remainingHeight -= rowHeight;
+            }
+            else
+            {
+                auto rowWidth = rowTotalArea / remainingHeight;
+                double cursorY = top;
+                for (auto const& item : row)
+                {
+                    auto rectHeight = item.area / rowWidth;
+                    result.push_back(Rect{left, cursorY, rowWidth, rectHeight, item.file});
+                    cursorY += rectHeight;
+                }
+
+                left += rowWidth;
+                remainingWidth -= rowWidth;
+            }
+
+            row.clear();
+            rowAreas.clear();
+        };
+
+        while (index < weighted.size())
+        {
+            if (remainingWidth <= 0.0 || remainingHeight <= 0.0)
+            {
+                break;
+            }
+
+            bool horizontal = remainingWidth >= remainingHeight;
+            auto shortSide = horizontal ? remainingHeight : remainingWidth;
+            if (shortSide <= 0.0)
+            {
+                break;
+            }
+
+            auto const& candidate = weighted[index];
+            auto rowScore = row.empty() ? std::numeric_limits<double>::infinity() : Score(rowAreas, shortSide);
+            auto nextAreas = rowAreas;
+            nextAreas.push_back(candidate.area);
+            auto nextScore = Score(nextAreas, shortSide);
+
+            if (row.empty() || nextScore <= rowScore)
+            {
+                row.push_back(candidate);
+                rowAreas = std::move(nextAreas);
+                ++index;
+                continue;
+            }
+
+            flushRow(horizontal);
+        }
+
+        if (!row.empty())
+        {
+            bool horizontal = remainingWidth >= remainingHeight;
+            flushRow(horizontal);
         }
 
         return result;
