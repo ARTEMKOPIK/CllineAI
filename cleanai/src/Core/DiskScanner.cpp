@@ -1,12 +1,34 @@
 #include "DiskScanner.h"
 
 #include <filesystem>
+#include <cwctype>
 #include <windows.h>
 
 using namespace std::chrono_literals;
 
 namespace CleanAI::Core
 {
+    namespace
+    {
+        bool EqualsIgnoreCase(std::wstring_view left, std::wstring_view right)
+        {
+            if (left.size() != right.size())
+            {
+                return false;
+            }
+
+            for (size_t index = 0; index < left.size(); ++index)
+            {
+                if (std::towlower(left[index]) != std::towlower(right[index]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
     winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::FileItem>> DiskScanner::ScanAsync(std::wstring root, ProgressCallback callback)
     {
         co_await winrt::resume_background();
@@ -92,11 +114,16 @@ namespace CleanAI::Core
             L"Program Files"
         };
 
-        for (auto const& item : blocked)
+        std::filesystem::path directoryPath(path);
+        for (auto const& part : directoryPath)
         {
-            if (path.find(item) != std::wstring::npos)
+            auto const currentPart = part.native();
+            for (auto const& blockedFolder : blocked)
             {
-                return true;
+                if (EqualsIgnoreCase(currentPart, blockedFolder))
+                {
+                    return true;
+                }
             }
         }
 
