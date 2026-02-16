@@ -120,16 +120,42 @@ jobs:
       - name: Build CleanAI
         shell: pwsh
         run: |
+          $buildDir = "build"
+          $cachePath = Join-Path $buildDir "CMakeCache.txt"
+
+          if (-not (Test-Path $cachePath)) {
+            $detectedCaches = @(Get-ChildItem -Path . -Filter CMakeCache.txt -File -Recurse -ErrorAction SilentlyContinue)
+            if ($detectedCaches.Count -eq 1) {
+              $buildDir = Split-Path -Path $detectedCaches[0].FullName -Parent
+              $cachePath = $detectedCaches[0].FullName
+              Write-Warning "Expected build/CMakeCache.txt not found. Using detected build directory: $buildDir"
+            }
+            elseif ($detectedCaches.Count -gt 1) {
+              $locations = $detectedCaches | ForEach-Object { $_.FullName }
+              throw "Unable to determine build directory. Found multiple CMake caches: $($locations -join '; ')"
+            }
+            else {
+              throw "CMake cache was not generated. Configure step likely failed before build stage."
+            }
+          }
+
+          $generator = (Get-Content $cachePath | Where-Object { $_ -like 'CMAKE_GENERATOR:*' } | Select-Object -First 1)
+          Write-Host "Using build directory: $buildDir"
+          if ($generator) {
+            Write-Host "Detected CMake generator: $generator"
+          }
+
           # Best-effort restore for Visual Studio generators.
           # This must not fail the pipeline because CMake can still build native targets
           # even when no .sln is generated (or when Restore target is unavailable).
-          $msbuild = Get-Command msbuild -ErrorAction SilentlyContinue
+          $isVisualStudioGenerator = $generator -and $generator -match 'Visual Studio'
+          $msbuild = if ($isVisualStudioGenerator) { Get-Command msbuild -ErrorAction SilentlyContinue } else { $null }
           if ($msbuild) {
-            $detectedSolutions = @(Get-ChildItem -Path build -Filter *.sln -File -Recurse -ErrorAction SilentlyContinue)
+            $detectedSolutions = @(Get-ChildItem -Path $buildDir -Filter *.sln -File -Recurse -ErrorAction SilentlyContinue)
             if ($detectedSolutions.Count -ge 1) {
               $solutionPath = $detectedSolutions[0].FullName
               if ($detectedSolutions.Count -gt 1) {
-                Write-Warning "Multiple .sln files detected under build/. Using first: $solutionPath"
+                Write-Warning "Multiple .sln files detected under $buildDir. Using first: $solutionPath"
               }
 
               & $msbuild.Source $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
@@ -138,22 +164,28 @@ jobs:
               }
             }
             else {
-              Write-Warning "No .sln file found under build/. Skipping MSBuild restore and continuing with CMake build."
+              Write-Warning "No .sln file found under $buildDir. Skipping MSBuild restore and continuing with CMake build."
             }
           }
-          else {
+          elseif ($isVisualStudioGenerator) {
             Write-Warning "MSBuild is not available in PATH after MSVC setup. Skipping explicit restore and continuing with CMake build."
           }
+          else {
+            Write-Host "Non-Visual-Studio generator detected. Skipping MSBuild restore step."
+          }
 
-          # Some CMake/VS combinations expose slightly different build target naming.
-          # Try explicit app target first, then fall back to building default targets.
-          cmake --build build --config Release --target CleanAI --parallel
-          if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Building target 'CleanAI' failed with exit code $LASTEXITCODE. Retrying default build targets..."
-            cmake --build build --config Release --parallel
+          # Build all default targets first because this works across all generators,
+          # then optionally retry a direct target build for Visual Studio solutions.
+          cmake --build $buildDir --config Release --parallel
+          if ($LASTEXITCODE -ne 0 -and $isVisualStudioGenerator) {
+            Write-Warning "Default build failed with exit code $LASTEXITCODE. Retrying explicit target 'CleanAI'..."
+            cmake --build $buildDir --config Release --target CleanAI --parallel
             if ($LASTEXITCODE -ne 0) {
-              throw "CMake build failed for both explicit target 'CleanAI' and default solution targets."
+              throw "CMake build failed for both default solution targets and explicit target 'CleanAI'."
             }
+          }
+          elseif ($LASTEXITCODE -ne 0) {
+            throw "CMake build failed for generator '$generator'."
           }
 
       - name: Prepare distributable bundle (EXE + runtime dependencies)
