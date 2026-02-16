@@ -30,14 +30,15 @@ cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=R
 msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 ```
 
-### Что теперь выкладывается после CI-сборки
+### Что сейчас публикует CI
 
-CI теперь собирает **обычную WinUI-версию** (без `CLEANAI_HEADLESS_CI=ON`) и публикует артефакт `CleanAI-win11-x64`:
+CI в GitHub Actions собирает `headless`-заглушку (`CLEANAI_HEADLESS_CI=ON`), потому что на стандартном раннере отсутствует CMake-пакет `Microsoft.WindowsAppSDK`, необходимый для полноценной WinUI-сборки.
 
-- папка `CleanAI` со всеми файлами из `build/Release`;
-- архив `CleanAI-win11-x64.zip` для удобного скачивания.
+Поэтому артефакт `CleanAI-exe` — это технический бинарник для проверки цепочки сборки, а не пользовательский GUI-пакет.
 
-Это сделано, чтобы пользователь получал рабочую версию приложения, а не headless-заглушку.
+### Как получить пользовательскую версию
+
+Собирайте WinUI-вариант локально на Windows 11 **без** флага `CLEANAI_HEADLESS_CI=ON` (команда выше в разделе «Полный WinUI-вариант»), либо используйте `cleanai/packaging/create_installer.bat` для упаковки в MSIX.
 
 ### Отладка в CI
 
