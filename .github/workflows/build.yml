@@ -96,12 +96,13 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path "release/CleanAI-win64" -Force | Out-Null
-          Copy-Item "build/Release/*" "release/CleanAI-win64/" -Recurse -Force
+          Copy-Item "build/Release/*" "release/CleanAI-win64/" -Recurse -Force -Exclude "CleanAI.CoreLogicTests.exe", "CleanAI.CoreLogicTests.pdb"
           @"
           CleanAI for Windows x64
 
           1) Распакуйте архив полностью.
           2) Запустите CleanAI.exe из папки CleanAI-win64.
+          3) Не запускайте CleanAI.CoreLogicTests.exe — это служебная проверка, а не приложение.
           "@ | Set-Content -Path "release/CleanAI-win64/README.txt" -Encoding UTF8
           Compress-Archive -Path "release/CleanAI-win64/*" -DestinationPath "release/CleanAI-win64.zip" -Force
 
