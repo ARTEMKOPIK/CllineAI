@@ -183,9 +183,7 @@ jobs:
               if ($candidateFromCache -and $candidateFromCache -notmatch '(-NOTFOUND)$') {
                 $candidateConfig = Join-Path $candidateFromCache "Microsoft.WindowsAppSDKConfig.cmake"
                 if (Test-Path $candidateConfig) {
-                  if (-not [string]::IsNullOrWhiteSpace($candidateFromCache)) {
-                    return $candidateFromCache.Trim()
-                  }
+                  return Normalize-NonEmptyString $candidateFromCache
                 }
               }
             }
@@ -204,9 +202,7 @@ jobs:
               $candidateConfig = @(Get-ChildItem -Path $root -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
               if ($candidateConfig.Count -ge 1) {
                 $resolvedDir = (Split-Path -Path $candidateConfig[0].FullName -Parent)
-                if (-not [string]::IsNullOrWhiteSpace($resolvedDir)) {
-                  return $resolvedDir.Trim()
-                }
+                return Normalize-NonEmptyString $resolvedDir
               }
             }
 
@@ -265,9 +261,7 @@ jobs:
                 $candidateConfig = @(Get-ChildItem -Path $installedPackageRoot -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
                 if ($candidateConfig.Count -ge 1) {
                   $resolvedDir = (Split-Path -Path $candidateConfig[0].FullName -Parent)
-                  if (-not [string]::IsNullOrWhiteSpace($resolvedDir)) {
-                    return $resolvedDir.Trim()
-                  }
+                  return Normalize-NonEmptyString $resolvedDir
                 }
               }
             }
