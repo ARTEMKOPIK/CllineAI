@@ -9,9 +9,21 @@ namespace CleanAI::Core
         wchar_t* localAppData{};
         size_t len{};
         _wdupenv_s(&localAppData, &len, L"LOCALAPPDATA");
-        auto dbPath = std::filesystem::path(localAppData) / L"CleanAI" / L"cleanai.db";
+        auto const appDataPath =
+            (localAppData != nullptr && len > 0)
+                ? std::filesystem::path(localAppData)
+                : std::filesystem::temp_directory_path();
+
+        auto dbPath = appDataPath / L"CleanAI" / L"cleanai.db";
         std::filesystem::create_directories(dbPath.parent_path());
-        sqlite3_open16(dbPath.c_str(), &m_db);
+        if (sqlite3_open16(dbPath.c_str(), &m_db) != SQLITE_OK)
+        {
+            if (m_db)
+            {
+                sqlite3_close(m_db);
+                m_db = nullptr;
+            }
+        }
         free(localAppData);
     }
 
@@ -25,6 +37,11 @@ namespace CleanAI::Core
 
     void HistoryDatabase::Initialize()
     {
+        if (!m_db)
+        {
+            return;
+        }
+
         char const* createActions =
             "CREATE TABLE IF NOT EXISTS actions ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -47,6 +64,11 @@ namespace CleanAI::Core
 
     void HistoryDatabase::SaveAction(HistoryRecord const& record)
     {
+        if (!m_db)
+        {
+            return;
+        }
+
         sqlite3_stmt* stmt{};
         sqlite3_prepare16_v2(m_db, L"INSERT INTO actions(timestamp,path,action,size,quarantine_path) VALUES(?,?,?,?,?)", -1, &stmt, nullptr);
         sqlite3_bind_text16(stmt, 1, record.timestamp.c_str(), -1, SQLITE_TRANSIENT);
@@ -60,6 +82,11 @@ namespace CleanAI::Core
 
     void HistoryDatabase::SaveAiCache(std::wstring const& pathHash, Models::Recommendation const& recommendation)
     {
+        if (!m_db)
+        {
+            return;
+        }
+
         sqlite3_stmt* stmt{};
         sqlite3_prepare16_v2(m_db, L"INSERT OR REPLACE INTO ai_cache(path_hash,recommendation,confidence,timestamp) VALUES(?,?,?,datetime('now'))", -1, &stmt, nullptr);
         sqlite3_bind_text16(stmt, 1, pathHash.c_str(), -1, SQLITE_TRANSIENT);
@@ -72,6 +99,11 @@ namespace CleanAI::Core
     std::vector<HistoryRecord> HistoryDatabase::LoadHistory() const
     {
         std::vector<HistoryRecord> result;
+        if (!m_db)
+        {
+            return result;
+        }
+
         sqlite3_stmt* stmt{};
         sqlite3_prepare16_v2(m_db, L"SELECT timestamp,path,action,size,quarantine_path FROM actions ORDER BY id DESC", -1, &stmt, nullptr);
 
