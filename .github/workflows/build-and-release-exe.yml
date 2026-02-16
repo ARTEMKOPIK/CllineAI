@@ -141,6 +141,39 @@ jobs:
 
           $generator = (Get-Content $cachePath | Where-Object { $_ -like 'CMAKE_GENERATOR:*' } | Select-Object -First 1)
           $windowsAppSdkDirEntry = (Get-Content $cachePath | Where-Object { $_ -like 'Microsoft.WindowsAppSDK_DIR:*' } | Select-Object -First 1)
+
+          function Resolve-WindowsAppSdkDir([string]$cacheEntry) {
+            if ($cacheEntry) {
+              $candidateFromCache = ($cacheEntry -split '=', 2)[1]
+              if ($candidateFromCache -and $candidateFromCache -notmatch '(-NOTFOUND)$') {
+                $candidateConfig = Join-Path $candidateFromCache "Microsoft.WindowsAppSDKConfig.cmake"
+                if (Test-Path $candidateConfig) {
+                  return $candidateFromCache
+                }
+              }
+            }
+
+            $fallbackRoots = @(
+              (Join-Path $env:RUNNER_TEMP "nuget-packages"),
+              (Join-Path $env:USERPROFILE ".nuget/packages"),
+              "C:/Program Files (x86)/Microsoft SDKs/Windows App SDK"
+            )
+
+            foreach ($root in $fallbackRoots) {
+              if (-not $root -or -not (Test-Path $root)) {
+                continue
+              }
+
+              $candidateConfig = @(Get-ChildItem -Path $root -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
+              if ($candidateConfig.Count -ge 1) {
+                return (Split-Path -Path $candidateConfig[0].FullName -Parent)
+              }
+            }
+
+            return $null
+          }
+
+          $resolvedWindowsAppSdkDir = Resolve-WindowsAppSdkDir -cacheEntry $windowsAppSdkDirEntry
           Write-Host "Using build directory: $buildDir"
           if ($generator) {
             Write-Host "Detected CMake generator: $generator"
@@ -148,6 +181,13 @@ jobs:
 
           if ($windowsAppSdkDirEntry) {
             Write-Host "Detected Microsoft.WindowsAppSDK_DIR from cache: $windowsAppSdkDirEntry"
+          }
+
+          if ($resolvedWindowsAppSdkDir) {
+            Write-Host "Using Microsoft.WindowsAppSDK_DIR for potential reconfigure: $resolvedWindowsAppSdkDir"
+          }
+          else {
+            Write-Warning "Unable to resolve a usable Microsoft.WindowsAppSDK_DIR for reconfigure. Continuing without explicit override."
           }
 
           # Best-effort restore for Visual Studio generators.
@@ -194,11 +234,8 @@ jobs:
                 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
               )
 
-              if ($windowsAppSdkDirEntry) {
-                $resolvedWindowsAppSdkDir = ($windowsAppSdkDirEntry -split '=', 2)[1]
-                if ($resolvedWindowsAppSdkDir) {
-                  $reconfigureArgs += "-DMicrosoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkDir"
-                }
+              if ($resolvedWindowsAppSdkDir) {
+                $reconfigureArgs += "-DMicrosoft.WindowsAppSDK_DIR=$resolvedWindowsAppSdkDir"
               }
 
               & cmake -S cleanai -B $buildDir -G "Visual Studio 17 2022" -A x64 @reconfigureArgs
