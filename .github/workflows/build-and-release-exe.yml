@@ -213,6 +213,19 @@ jobs:
             return $null
           }
 
+          function Normalize-NonEmptyString([object]$value) {
+            if ($null -eq $value) {
+              return $null
+            }
+
+            $text = [string]$value
+            if ([string]::IsNullOrWhiteSpace($text)) {
+              return $null
+            }
+
+            return $text.Trim()
+          }
+
           function Install-AndResolveWindowsAppSdkDirFromNuGet() {
             if (Get-Command nuget -ErrorAction SilentlyContinue) {
               $nuget = "nuget"
@@ -262,13 +275,7 @@ jobs:
             return $null
           }
 
-          $resolvedWindowsAppSdkDir = Resolve-WindowsAppSdkDir -cacheEntry $windowsAppSdkDirEntry
-          if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
-            $resolvedWindowsAppSdkDir = $resolvedWindowsAppSdkDir.Trim()
-          }
-          else {
-            $resolvedWindowsAppSdkDir = $null
-          }
+          $resolvedWindowsAppSdkDir = Normalize-NonEmptyString (Resolve-WindowsAppSdkDir -cacheEntry $windowsAppSdkDirEntry)
           Write-Host "Using build directory: $buildDir"
           if ($generator) {
             Write-Host "Detected CMake generator: $generator"
@@ -278,7 +285,7 @@ jobs:
             Write-Host "Detected Microsoft.WindowsAppSDK_DIR from cache: $windowsAppSdkDirEntry"
           }
 
-          if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
+          if ($resolvedWindowsAppSdkDir) {
             Write-Host "Using Microsoft.WindowsAppSDK_DIR for potential reconfigure: $resolvedWindowsAppSdkDir"
           }
           else {
@@ -335,18 +342,12 @@ jobs:
             if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
               Write-Warning "Visual Studio generator was detected, but top-level solution/project files are missing in '$buildDir'."
 
-              if ([string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
+              if (-not $resolvedWindowsAppSdkDir) {
                 Write-Warning "Microsoft.WindowsAppSDK_DIR is unresolved in this step. Attempting NuGet recovery for reconfigure..."
-                $resolvedWindowsAppSdkDir = Install-AndResolveWindowsAppSdkDirFromNuGet
-                if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
-                  $resolvedWindowsAppSdkDir = $resolvedWindowsAppSdkDir.Trim()
-                }
-                else {
-                  $resolvedWindowsAppSdkDir = $null
-                }
+                $resolvedWindowsAppSdkDir = Normalize-NonEmptyString (Install-AndResolveWindowsAppSdkDirFromNuGet)
               }
 
-              if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
+              if ($resolvedWindowsAppSdkDir) {
                 Write-Warning "Re-running configure step before build to recover missing Visual Studio files..."
 
                 $resolvedConfig = Join-Path $resolvedWindowsAppSdkDir "Microsoft.WindowsAppSDKConfig.cmake"
@@ -356,7 +357,7 @@ jobs:
                 }
               }
 
-              if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
+              if ($resolvedWindowsAppSdkDir) {
                 Remove-Item -Path $buildDir -Recurse -Force -ErrorAction SilentlyContinue
 
                 $reconfigureArgs = @(
