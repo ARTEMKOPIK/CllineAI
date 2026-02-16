@@ -183,7 +183,9 @@ jobs:
               if ($candidateFromCache -and $candidateFromCache -notmatch '(-NOTFOUND)$') {
                 $candidateConfig = Join-Path $candidateFromCache "Microsoft.WindowsAppSDKConfig.cmake"
                 if (Test-Path $candidateConfig) {
-                  return $candidateFromCache
+                  if (-not [string]::IsNullOrWhiteSpace($candidateFromCache)) {
+                    return $candidateFromCache.Trim()
+                  }
                 }
               }
             }
@@ -201,7 +203,10 @@ jobs:
 
               $candidateConfig = @(Get-ChildItem -Path $root -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
               if ($candidateConfig.Count -ge 1) {
-                return (Split-Path -Path $candidateConfig[0].FullName -Parent)
+                $resolvedDir = (Split-Path -Path $candidateConfig[0].FullName -Parent)
+                if (-not [string]::IsNullOrWhiteSpace($resolvedDir)) {
+                  return $resolvedDir.Trim()
+                }
               }
             }
 
@@ -246,7 +251,10 @@ jobs:
               if (Test-Path $installedPackageRoot) {
                 $candidateConfig = @(Get-ChildItem -Path $installedPackageRoot -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
                 if ($candidateConfig.Count -ge 1) {
-                  return (Split-Path -Path $candidateConfig[0].FullName -Parent)
+                  $resolvedDir = (Split-Path -Path $candidateConfig[0].FullName -Parent)
+                  if (-not [string]::IsNullOrWhiteSpace($resolvedDir)) {
+                    return $resolvedDir.Trim()
+                  }
                 }
               }
             }
@@ -255,6 +263,12 @@ jobs:
           }
 
           $resolvedWindowsAppSdkDir = Resolve-WindowsAppSdkDir -cacheEntry $windowsAppSdkDirEntry
+          if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
+            $resolvedWindowsAppSdkDir = $resolvedWindowsAppSdkDir.Trim()
+          }
+          else {
+            $resolvedWindowsAppSdkDir = $null
+          }
           Write-Host "Using build directory: $buildDir"
           if ($generator) {
             Write-Host "Detected CMake generator: $generator"
@@ -264,7 +278,7 @@ jobs:
             Write-Host "Detected Microsoft.WindowsAppSDK_DIR from cache: $windowsAppSdkDirEntry"
           }
 
-          if ($resolvedWindowsAppSdkDir) {
+          if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
             Write-Host "Using Microsoft.WindowsAppSDK_DIR for potential reconfigure: $resolvedWindowsAppSdkDir"
           }
           else {
@@ -321,12 +335,18 @@ jobs:
             if ($rootSolutions.Count -eq 0 -or $rootProjects.Count -eq 0) {
               Write-Warning "Visual Studio generator was detected, but top-level solution/project files are missing in '$buildDir'."
 
-              if (-not $resolvedWindowsAppSdkDir) {
+              if ([string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
                 Write-Warning "Microsoft.WindowsAppSDK_DIR is unresolved in this step. Attempting NuGet recovery for reconfigure..."
                 $resolvedWindowsAppSdkDir = Install-AndResolveWindowsAppSdkDirFromNuGet
+                if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
+                  $resolvedWindowsAppSdkDir = $resolvedWindowsAppSdkDir.Trim()
+                }
+                else {
+                  $resolvedWindowsAppSdkDir = $null
+                }
               }
 
-              if ($resolvedWindowsAppSdkDir) {
+              if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
                 Write-Warning "Re-running configure step before build to recover missing Visual Studio files..."
 
                 $resolvedConfig = Join-Path $resolvedWindowsAppSdkDir "Microsoft.WindowsAppSDKConfig.cmake"
@@ -336,7 +356,7 @@ jobs:
                 }
               }
 
-              if ($resolvedWindowsAppSdkDir) {
+              if (-not [string]::IsNullOrWhiteSpace($resolvedWindowsAppSdkDir)) {
                 Remove-Item -Path $buildDir -Recurse -Force -ErrorAction SilentlyContinue
 
                 $reconfigureArgs = @(
