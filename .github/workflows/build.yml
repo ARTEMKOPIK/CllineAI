@@ -41,25 +41,31 @@ jobs:
             "C:/Program Files/Microsoft Visual Studio/2022/Community"
           )
 
+          $candidatePatterns = @(
+            "Microsoft.WindowsAppSDKConfig.cmake",
+            "microsoft.windowsappsdk-config.cmake"
+          )
+
           $config = $null
           foreach ($root in $searchRoots) {
             if (-not (Test-Path $root)) {
               continue
             }
 
-            $config = Get-ChildItem -Path $root -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            foreach ($pattern in $candidatePatterns) {
+              $config = Get-ChildItem -Path $root -Filter $pattern -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($config) {
+                break
+              }
+            }
+
             if ($config) {
               break
             }
           }
 
           if (-not $config) {
-            # Safety net for runner image layout changes.
-            $config = Get-ChildItem -Path "C:/" -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-
-          if (-not $config) {
-            throw "Microsoft.WindowsAppSDKConfig.cmake was not found on windows-2022 image (searched common SDK/VS roots and full C:/ fallback)."
+            throw "Windows App SDK CMake config was not found on windows-2022 image (searched common SDK/VS roots for both known config file names)."
           }
 
           $sdkDir = Split-Path -Path $config.FullName -Parent
