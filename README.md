@@ -1,52 +1,42 @@
 # CleanAI
 
-## Windows CI (стабильный режим сборки)
+## Windows CI (релизный WinUI-режим)
 
-В репозитории используется `.github/workflows/build.yml` с простой схемой:
+В репозитории используется `.github/workflows/build.yml` с релизной схемой:
 
 1. `vcpkg install` зависимостей;
-2. `cmake` генерирует `build/CleanAI.sln` в обычном режиме; если WinUI SDK не найден — автоматически переключается на headless;
-3. `msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m`.
+2. `cmake` генерирует `build/CleanAI.sln` **только** для WinUI (без автоматического перехода в headless);
+3. `msbuild` собирает `Release x64`;
+4. CI упаковывает релизную папку в `CleanAI-win64.zip`.
 
 ### Что это значит
 
-- Если на раннере доступен `Microsoft.WindowsAppSDK`, собирается полноценный WinUI-вариант.
-- Если пакет отсутствует, сборка не падает: CMake автоматически уходит в headless-режим.
-- Локально/в релизной среде можно принудительно выбрать нужный режим флагами CMake.
+- CI теперь собирает только полноценное WinUI-приложение.
+- Если на раннере отсутствует `Microsoft.WindowsAppSDK`, сборка завершается с ошибкой (чтобы случайно не выпустить техническую заглушку).
+- В релиз публикуется архив `CleanAI-win64.zip` с содержимым папки `build/Release` и краткой инструкцией запуска.
 
 ### Локальная сборка на Windows
 
-**CI-совместимый headless-вариант:**
+**Полный WinUI-вариант (как в CI):**
+
+```powershell
+cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake" -DCLEANAI_AUTO_FALLBACK_HEADLESS=OFF
+msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
+```
+
+**Технический headless-вариант (только для диагностики):**
 
 ```powershell
 cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake" -DCLEANAI_HEADLESS_CI=ON
 msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 ```
 
-**Полный WinUI-вариант (как раньше):**
+### Что публикует CI
 
-```powershell
-cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake"
-msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
-```
-
-### Что сейчас публикует CI
-
-CI запускает обычную конфигурацию. Дальше есть два сценария:
-
-- если `Microsoft.WindowsAppSDK` найден — собирается обычная WinUI-версия;
-- если пакет не найден — CMake автоматически переключает сборку в `headless` (без падения пайплайна).
-
-Чтобы запретить автоматический откат и сразу получить ошибку при отсутствии WinUI SDK, добавьте флаг:
-
-```powershell
--DCLEANAI_AUTO_FALLBACK_HEADLESS=OFF
-```
+- Артефакт workflow: `CleanAI-win64.zip`.
+- Для тегов `v*`: тот же архив публикуется в GitHub Release.
+- Диагностика среды раннера доступна в артефакте `build-debug-logs`.
 
 ### Как получить пользовательскую версию
 
-На Windows 11 ставьте окружение Windows App SDK и запускайте «Полный WinUI-вариант» из инструкции выше. Если нужно готовое приложение для установки, используйте `cleanai/packaging/create_installer.bat`.
-
-### Отладка в CI
-
-При каждом запуске workflow выгружается артефакт `build-debug-logs` (даже при падении), где есть диагностика окружения раннера.
+Скачайте `CleanAI-win64.zip`, распакуйте архив полностью и запустите `CleanAI.exe`.
