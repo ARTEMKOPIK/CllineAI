@@ -48,6 +48,20 @@ namespace
         auto result = client.ClassifyBatchAsync(files).get();
         failures += AssertTrue(result.size() == 1, "Fallback returns recommendation for each input file");
         failures += AssertTrue(result[0].action == CleanAI::Models::RecommendationAction::Ask, "On network error recommendation falls back to Ask");
+        failures += AssertTrue(result[0].reason == L"Fallback: Ollama недоступна или вернула некорректный JSON", "Fallback reason describes Ollama/JSON error");
+
+        return failures;
+    }
+
+    int TestClassifyBatchEmptyInput()
+    {
+        int failures = 0;
+
+        CleanAI::Core::OllamaClient client(U("http://127.0.0.1:1"));
+        std::vector<CleanAI::Models::FileItem> files;
+
+        auto result = client.ClassifyBatchAsync(files).get();
+        failures += AssertTrue(result.empty(), "Empty input batch returns empty recommendation list");
 
         return failures;
     }
@@ -60,6 +74,7 @@ int main()
     int failures = 0;
     failures += TestShouldSkipDirectory();
     failures += TestClassifyBatchFallback();
+    failures += TestClassifyBatchEmptyInput();
 
     if (failures == 0)
     {

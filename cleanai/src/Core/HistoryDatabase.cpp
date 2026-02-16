@@ -64,11 +64,16 @@ namespace CleanAI::Core
             "CREATE TABLE IF NOT EXISTS ai_cache ("
             "path_hash TEXT PRIMARY KEY,"
             "recommendation TEXT,"
+            "reason TEXT,"
             "confidence REAL,"
             "timestamp TEXT);";
 
+        char const* migrateAiCacheReason =
+            "ALTER TABLE ai_cache ADD COLUMN reason TEXT;";
+
         sqlite3_exec(m_db, createActions, nullptr, nullptr, nullptr);
         sqlite3_exec(m_db, createAiCache, nullptr, nullptr, nullptr);
+        sqlite3_exec(m_db, migrateAiCacheReason, nullptr, nullptr, nullptr);
     }
 
     void HistoryDatabase::SaveAction(HistoryRecord const& record)
@@ -102,15 +107,22 @@ namespace CleanAI::Core
         }
 
         sqlite3_stmt* stmt{};
-        auto const prepareResult = sqlite3_prepare16_v2(m_db, L"INSERT OR REPLACE INTO ai_cache(path_hash,recommendation,confidence,timestamp) VALUES(?,?,?,datetime('now'))", -1, &stmt, nullptr);
+        auto const prepareResult = sqlite3_prepare16_v2(m_db, L"INSERT OR REPLACE INTO ai_cache(path_hash,recommendation,reason,confidence,timestamp) VALUES(?,?,?,?,datetime('now'))", -1, &stmt, nullptr);
         if (prepareResult != SQLITE_OK || !stmt)
         {
             return;
         }
 
         sqlite3_bind_text16(stmt, 1, pathHash.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text16(stmt, 2, recommendation.reason.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_double(stmt, 3, recommendation.confidence);
+        auto actionText = recommendation.action == Models::RecommendationAction::Delete
+                              ? L"DELETE"
+                              : recommendation.action == Models::RecommendationAction::Keep
+                                    ? L"KEEP"
+                                    : L"ASK";
+
+        sqlite3_bind_text16(stmt, 2, actionText, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 3, recommendation.reason.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_double(stmt, 4, recommendation.confidence);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }
