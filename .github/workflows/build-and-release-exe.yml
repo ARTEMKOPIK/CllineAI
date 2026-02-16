@@ -238,10 +238,16 @@ jobs:
                 continue
               }
 
-              $candidateDir = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$version/build/native"
-              $candidateConfig = Join-Path $candidateDir "Microsoft.WindowsAppSDKConfig.cmake"
-              if (Test-Path $candidateConfig) {
-                return $candidateDir
+              $installedPackageRoot = Join-Path $windowsAppSdkPackagesDir "Microsoft.WindowsAppSDK.$version"
+              if (-not (Test-Path $installedPackageRoot)) {
+                $installedPackageRoot = Join-Path $windowsAppSdkPackagesDir "microsoft.windowsappsdk.$version"
+              }
+
+              if (Test-Path $installedPackageRoot) {
+                $candidateConfig = @(Get-ChildItem -Path $installedPackageRoot -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
+                if ($candidateConfig.Count -ge 1) {
+                  return (Split-Path -Path $candidateConfig[0].FullName -Parent)
+                }
               }
             }
 
@@ -322,6 +328,16 @@ jobs:
 
               if ($resolvedWindowsAppSdkDir) {
                 Write-Warning "Re-running configure step before build to recover missing Visual Studio files..."
+
+                $resolvedConfig = Join-Path $resolvedWindowsAppSdkDir "Microsoft.WindowsAppSDKConfig.cmake"
+                if (-not (Test-Path $resolvedConfig)) {
+                  Write-Warning "Resolved Microsoft.WindowsAppSDK_DIR is invalid: $resolvedWindowsAppSdkDir"
+                  $resolvedWindowsAppSdkDir = $null
+                }
+              }
+
+              if ($resolvedWindowsAppSdkDir) {
+                Remove-Item -Path $buildDir -Recurse -Force -ErrorAction SilentlyContinue
 
                 $reconfigureArgs = @(
                   "-DCMAKE_BUILD_TYPE=Release",
