@@ -1,0 +1,67 @@
+name: Build Windows (MSBuild)
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Debug runner environment
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build-logs -Force | Out-Null
+          "=== Tool versions ===" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          (Get-Command cmake -ErrorAction SilentlyContinue | Format-List | Out-String) | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          (Get-Command msbuild -ErrorAction SilentlyContinue | Format-List | Out-String) | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "=== Key env vars ===" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "VCPKG_ROOT=$env:VCPKG_ROOT" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "VSINSTALLDIR=$env:VSINSTALLDIR" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          "WindowsSdkDir=$env:WindowsSdkDir" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$env:RUNNER_TEMP/vcpkg"
+          & "$env:RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat"
+
+      - name: Install native dependencies via vcpkg
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/vcpkg/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
+
+      - name: Generate Visual Studio solution (headless CI mode)
+        shell: pwsh
+        run: |
+          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCLEANAI_HEADLESS_CI=ON
+
+      - name: Build solution
+        shell: pwsh
+        run: |
+          msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: CleanAI-Release
+          path: |
+            build/Release/**
+
+      - name: Upload debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-debug-logs
+          path: |
+            build-logs/**
