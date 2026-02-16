@@ -33,9 +33,33 @@ jobs:
         id: windowsappsdk
         shell: pwsh
         run: |
-          $config = Get-ChildItem -Path "C:/Program Files (x86)/Microsoft SDKs/Windows App SDK" -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $searchRoots = @(
+            "C:/Program Files (x86)/Microsoft SDKs/Windows App SDK",
+            "C:/Program Files (x86)/Windows Kits",
+            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise",
+            "C:/Program Files/Microsoft Visual Studio/2022/Professional",
+            "C:/Program Files/Microsoft Visual Studio/2022/Community"
+          )
+
+          $config = $null
+          foreach ($root in $searchRoots) {
+            if (-not (Test-Path $root)) {
+              continue
+            }
+
+            $config = Get-ChildItem -Path $root -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($config) {
+              break
+            }
+          }
+
           if (-not $config) {
-            throw "Microsoft.WindowsAppSDKConfig.cmake was not found on windows-2022 image."
+            # Safety net for runner image layout changes.
+            $config = Get-ChildItem -Path "C:/" -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+
+          if (-not $config) {
+            throw "Microsoft.WindowsAppSDKConfig.cmake was not found on windows-2022 image (searched common SDK/VS roots and full C:/ fallback)."
           }
 
           $sdkDir = Split-Path -Path $config.FullName -Parent

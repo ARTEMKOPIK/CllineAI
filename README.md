@@ -5,7 +5,7 @@
 В репозитории используется `.github/workflows/build.yml` с максимально простой схемой:
 
 1. `vcpkg install` зависимостей;
-2. workflow находит `Microsoft.WindowsAppSDKConfig.cmake` в предустановленном Windows App SDK (на `windows-2022`) и экспортирует путь в `WINDOWS_APP_SDK_DIR`;
+2. workflow ищет `Microsoft.WindowsAppSDKConfig.cmake` по нескольким стандартным корням Windows SDK/Visual Studio на `windows-2022` (с fallback-поиском) и экспортирует путь в `WINDOWS_APP_SDK_DIR`;
 3. `cmake` генерирует `build/CleanAI.sln` c `-DMicrosoft.WindowsAppSDK_DIR=...`;
 4. `msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m`.
 
