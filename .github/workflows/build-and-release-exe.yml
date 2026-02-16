@@ -120,26 +120,25 @@ jobs:
       - name: Build CleanAI
         shell: pwsh
         run: |
-          # Try explicit restore first. Some generated Visual Studio solutions do not
-          # expose the Restore target (for example, pure native C++ projects without
-          # NuGet references), so restore failures are treated as non-fatal.
-          $solutionPath = "build/CleanAI.sln"
-          if (-not (Test-Path $solutionPath)) {
-            $detectedSolutions = @(Get-ChildItem -Path build -Filter *.sln -File -ErrorAction SilentlyContinue)
-            if ($detectedSolutions.Count -eq 1) {
-              $solutionPath = $detectedSolutions[0].FullName
-              Write-Warning "Using detected solution path: $solutionPath"
-            }
-            else {
-              throw "Expected Visual Studio solution not found at build/CleanAI.sln and auto-detection failed."
-            }
-          }
-
+          # Best-effort restore for Visual Studio generators.
+          # This must not fail the pipeline because CMake can still build native targets
+          # even when no .sln is generated (or when Restore target is unavailable).
           $msbuild = Get-Command msbuild -ErrorAction SilentlyContinue
           if ($msbuild) {
-            & $msbuild.Source $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
-            if ($LASTEXITCODE -ne 0) {
-              Write-Warning "MSBuild restore failed with exit code $LASTEXITCODE. Continuing to build because Restore may be unavailable for this generated native solution."
+            $detectedSolutions = @(Get-ChildItem -Path build -Filter *.sln -File -Recurse -ErrorAction SilentlyContinue)
+            if ($detectedSolutions.Count -ge 1) {
+              $solutionPath = $detectedSolutions[0].FullName
+              if ($detectedSolutions.Count -gt 1) {
+                Write-Warning "Multiple .sln files detected under build/. Using first: $solutionPath"
+              }
+
+              & $msbuild.Source $solutionPath /t:Restore /p:Configuration=Release /p:Platform=x64 /m
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "MSBuild restore failed with exit code $LASTEXITCODE. Continuing because Restore may be unavailable for this generated native solution."
+              }
+            }
+            else {
+              Write-Warning "No .sln file found under build/. Skipping MSBuild restore and continuing with CMake build."
             }
           }
           else {
