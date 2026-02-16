@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+#include <winrt/base.h>
 
 namespace
 {
