@@ -1,4 +1,4 @@
-# CllineAI
+# CleanAI
 
 ## Windows CI (стабильный режим сборки)
 

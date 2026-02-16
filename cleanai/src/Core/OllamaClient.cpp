@@ -148,14 +148,16 @@ namespace
         }
         catch (...)
         {
-            // Если не удалось проверить или подтянуть модель, классификация позже вернёт ask/fallback.
+            // Не блокируем запуск: при ошибке проверки/загрузки модели классификация всё равно выполнится с fallback на Ask.
         }
     }
 }
 
 namespace CleanAI::Core
 {
-    OllamaClient::OllamaClient() : m_client(U("http://localhost:11434")) {}
+    OllamaClient::OllamaClient() : OllamaClient(U("http://localhost:11434")) {}
+
+    OllamaClient::OllamaClient(utility::string_t baseUrl) : m_client(std::move(baseUrl)) {}
 
     winrt::Windows::Foundation::IAsyncAction OllamaClient::EnsureServerAvailableAsync()
     {
@@ -198,30 +200,43 @@ namespace CleanAI::Core
 
         for (auto const& file : files)
         {
-            web::json::value body;
-            body[U("model")] = web::json::value::string(U("tinyllama"));
-
-            std::wstring prompt = L"Файл: " + file.path + L", размер: " + std::to_wstring(file.sizeBytes / (1024.0 * 1024.0)) +
-                                  L" МБ, не открывался 0 дней. Классифицируй как: КЭШ / ДУБЛИКАТ / ДОКУМЕНТ / МЕДИА / НЕИЗВЕСТНО. "
-                                  L"Можно ли удалить без риска? Ответь строго одним словом: УДАЛИТЬ / ОСТАВИТЬ / СПРОСИТЬ.";
-            body[U("prompt")] = web::json::value::string(utility::conversions::to_string_t(prompt));
-            body[U("stream")] = web::json::value::boolean(false);
-
-            auto response = m_client.request(web::http::methods::POST, U("/api/generate"), body).get();
-            auto json = response.extract_json().get();
-            auto text = json.has_field(U("response")) ? json[U("response")].as_string() : U("СПРОСИТЬ");
-
             Models::Recommendation recommendation{};
             recommendation.type = L"НЕИЗВЕСТНО";
             recommendation.reason = L"Классификация tinyllama";
             recommendation.confidence = 0.70;
+            recommendation.action = Models::RecommendationAction::Ask;
 
-            if (text.find(U("УДАЛИТЬ")) != utility::string_t::npos)
-                recommendation.action = Models::RecommendationAction::Delete;
-            else if (text.find(U("ОСТАВИТЬ")) != utility::string_t::npos)
-                recommendation.action = Models::RecommendationAction::Keep;
-            else
-                recommendation.action = Models::RecommendationAction::Ask;
+            try
+            {
+                web::json::value body;
+                body[U("model")] = web::json::value::string(U("tinyllama"));
+
+                std::wstring prompt = L"Файл: " + file.path + L", размер: " + std::to_wstring(file.sizeBytes / (1024.0 * 1024.0)) +
+                                      L" МБ, не открывался 0 дней. Классифицируй как: КЭШ / ДУБЛИКАТ / ДОКУМЕНТ / МЕДИА / НЕИЗВЕСТНО. "
+                                      L"Можно ли удалить без риска? Ответь строго одним словом: УДАЛИТЬ / ОСТАВИТЬ / СПРОСИТЬ.";
+                body[U("prompt")] = web::json::value::string(utility::conversions::to_string_t(prompt));
+                body[U("stream")] = web::json::value::boolean(false);
+
+                auto response = m_client.request(web::http::methods::POST, U("/api/generate"), body).get();
+                if (response.status_code() >= 400)
+                {
+                    recommendation.reason = L"Fallback: ошибка ответа Ollama";
+                    result.push_back(std::move(recommendation));
+                    continue;
+                }
+
+                auto json = response.extract_json().get();
+                auto text = json.has_field(U("response")) ? json[U("response")].as_string() : U("СПРОСИТЬ");
+
+                if (text.find(U("УДАЛИТЬ")) != utility::string_t::npos)
+                    recommendation.action = Models::RecommendationAction::Delete;
+                else if (text.find(U("ОСТАВИТЬ")) != utility::string_t::npos)
+                    recommendation.action = Models::RecommendationAction::Keep;
+            }
+            catch (...)
+            {
+                recommendation.reason = L"Fallback: Ollama недоступна или вернула некорректный JSON";
+            }
 
             result.push_back(std::move(recommendation));
         }

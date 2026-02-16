@@ -24,6 +24,9 @@ namespace CleanAI::Core
         winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::FileItem>> ScanAsync(std::wstring root, ProgressCallback callback);
         static std::vector<std::wstring> DetectLocalDrives();
 
+    public:
+        static bool IsSystemDirectoryPathForSkip(std::wstring const& path);
+
     private:
         bool ShouldSkipDirectory(std::wstring const& path) const;
         std::mutex m_mutex;

@@ -29,6 +29,22 @@ if(CLEANAI_HEADLESS_CI)
         SQLite::SQLite3
     )
 
+    add_executable(CleanAI.CoreLogicTests
+        tests/CoreLogicTests.cpp
+        src/Core/DiskScanner.cpp
+        src/Core/OllamaClient.cpp
+    )
+
+    target_include_directories(CleanAI.CoreLogicTests PRIVATE src)
+
+    target_link_libraries(CleanAI.CoreLogicTests PRIVATE
+        cpprestsdk::cpprest
+        SQLite::SQLite3
+    )
+
+    enable_testing()
+    add_test(NAME CoreLogicTests COMMAND CleanAI.CoreLogicTests)
+
     install(TARGETS CleanAI RUNTIME DESTINATION .)
     return()
 endif()

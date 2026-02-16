@@ -1,9 +1,31 @@
 #include "DiskScanner.h"
 
 #include <filesystem>
+#include <cwctype>
 #include <windows.h>
 
 using namespace std::chrono_literals;
+
+namespace
+{
+    bool EqualsIgnoreCase(std::wstring_view lhs, std::wstring_view rhs)
+    {
+        if (lhs.size() != rhs.size())
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < lhs.size(); ++i)
+        {
+            if (towlower(lhs[i]) != towlower(rhs[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
 
 namespace CleanAI::Core
 {
@@ -91,23 +113,53 @@ namespace CleanAI::Core
         return drives;
     }
 
-    bool DiskScanner::ShouldSkipDirectory(std::wstring const& path) const
+    bool DiskScanner::IsSystemDirectoryPathForSkip(std::wstring const& path)
     {
-        static constexpr std::wstring_view blocked[] = {
+        static constexpr std::wstring_view blockedRootDirectories[] = {
             L"$Recycle.Bin",
             L"System Volume Information",
             L"Windows",
-            L"Program Files"
+            L"Program Files",
+            L"Program Files (x86)"
         };
 
-        for (auto const& item : blocked)
+        std::filesystem::path parsed(path);
+        std::wstring firstDirectory;
+        for (auto const& segment : parsed)
         {
-            if (path.find(item) != std::wstring::npos)
+            auto segmentText = segment.wstring();
+            if (segmentText.empty() || segmentText == L"\\" || segmentText == L"/")
+            {
+                continue;
+            }
+
+            if (parsed.has_root_name() && EqualsIgnoreCase(segmentText, parsed.root_name().wstring()))
+            {
+                continue;
+            }
+
+            firstDirectory = std::move(segmentText);
+            break;
+        }
+
+        if (firstDirectory.empty())
+        {
+            return false;
+        }
+
+        for (auto const& blocked : blockedRootDirectories)
+        {
+            if (EqualsIgnoreCase(firstDirectory, blocked))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    bool DiskScanner::ShouldSkipDirectory(std::wstring const& path) const
+    {
+        return IsSystemDirectoryPathForSkip(path);
     }
 }
