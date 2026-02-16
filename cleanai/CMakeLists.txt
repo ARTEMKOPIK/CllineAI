@@ -10,6 +10,7 @@ if(NOT WIN32)
 endif()
 
 option(CLEANAI_HEADLESS_CI "Build headless CI stub instead of WinUI app" OFF)
+option(CLEANAI_AUTO_FALLBACK_HEADLESS "Fallback to headless build if WindowsAppSDK CMake package is missing" ON)
 
 add_compile_definitions(
     UNICODE
@@ -38,6 +39,30 @@ target_link_libraries(CleanAI.CoreLogicTests PRIVATE
 enable_testing()
 add_test(NAME CoreLogicTests COMMAND CleanAI.CoreLogicTests)
 
+if(NOT CLEANAI_HEADLESS_CI)
+    set(WINDOWS_APP_SDK_VERSION "1.5")
+    find_package(Microsoft.WindowsAppSDK QUIET CONFIG)
+
+    if(NOT Microsoft.WindowsAppSDK_FOUND)
+        if(CLEANAI_AUTO_FALLBACK_HEADLESS)
+            message(WARNING
+                "Microsoft.WindowsAppSDK CMake package not found. "
+                "Falling back to CLEANAI_HEADLESS_CI=ON. "
+                "To build full WinUI app, install Windows App SDK development environment "
+                "and/or pass -DMicrosoft.WindowsAppSDK_DIR=<path to Microsoft.WindowsAppSDKConfig.cmake>."
+            )
+            set(CLEANAI_HEADLESS_CI ON)
+        else()
+            message(FATAL_ERROR
+                "Microsoft.WindowsAppSDK CMake package not found. "
+                "Install Windows App SDK development environment or pass "
+                "-DMicrosoft.WindowsAppSDK_DIR=<path to Microsoft.WindowsAppSDKConfig.cmake>. "
+                "Alternatively, enable headless build with -DCLEANAI_HEADLESS_CI=ON."
+            )
+        endif()
+    endif()
+endif()
+
 if(CLEANAI_HEADLESS_CI)
     add_executable(CleanAI src/ci_main.cpp)
 
@@ -49,9 +74,6 @@ if(CLEANAI_HEADLESS_CI)
     install(TARGETS CleanAI RUNTIME DESTINATION .)
     return()
 endif()
-
-set(WINDOWS_APP_SDK_VERSION "1.5")
-find_package(Microsoft.WindowsAppSDK REQUIRED CONFIG)
 
 set(CLEANAI_SOURCES
     src/main.cpp

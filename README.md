@@ -5,14 +5,14 @@
 В репозитории используется `.github/workflows/build.yml` с простой схемой:
 
 1. `vcpkg install` зависимостей;
-2. `cmake` генерирует `build/CleanAI.sln` в режиме `-DCLEANAI_HEADLESS_CI=ON`;
+2. `cmake` генерирует `build/CleanAI.sln` в обычном режиме; если WinUI SDK не найден — автоматически переключается на headless;
 3. `msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m`.
 
 ### Что это значит
 
-- Полноценный WinUI runtime (`Microsoft.WindowsAppSDK`) больше **не блокирует CI**.
-- На CI собирается headless-заглушка `CleanAI` (для проверки toolchain, зависимостей и воспроизводимости).
-- Локально/в релизной среде можно собирать обычный WinUI-вариант (без `CLEANAI_HEADLESS_CI=ON`).
+- Если на раннере доступен `Microsoft.WindowsAppSDK`, собирается полноценный WinUI-вариант.
+- Если пакет отсутствует, сборка не падает: CMake автоматически уходит в headless-режим.
+- Локально/в релизной среде можно принудительно выбрать нужный режим флагами CMake.
 
 ### Локальная сборка на Windows
 
@@ -32,13 +32,20 @@ msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 
 ### Что сейчас публикует CI
 
-CI в GitHub Actions собирает `headless`-заглушку (`CLEANAI_HEADLESS_CI=ON`), потому что на стандартном раннере отсутствует CMake-пакет `Microsoft.WindowsAppSDK`, необходимый для полноценной WinUI-сборки.
+CI запускает обычную конфигурацию. Дальше есть два сценария:
 
-Поэтому артефакт `CleanAI-exe` — это технический бинарник для проверки цепочки сборки, а не пользовательский GUI-пакет.
+- если `Microsoft.WindowsAppSDK` найден — собирается обычная WinUI-версия;
+- если пакет не найден — CMake автоматически переключает сборку в `headless` (без падения пайплайна).
+
+Чтобы запретить автоматический откат и сразу получить ошибку при отсутствии WinUI SDK, добавьте флаг:
+
+```powershell
+-DCLEANAI_AUTO_FALLBACK_HEADLESS=OFF
+```
 
 ### Как получить пользовательскую версию
 
-Собирайте WinUI-вариант локально на Windows 11 **без** флага `CLEANAI_HEADLESS_CI=ON` (команда выше в разделе «Полный WinUI-вариант»), либо используйте `cleanai/packaging/create_installer.bat` для упаковки в MSIX.
+На Windows 11 ставьте окружение Windows App SDK и запускайте «Полный WinUI-вариант» из инструкции выше. Если нужно готовое приложение для установки, используйте `cleanai/packaging/create_installer.bat`.
 
 ### Отладка в CI
 
