@@ -15,9 +15,17 @@ namespace CleanAI::Core
         ScanProgress progress{};
         auto lastUpdate = std::chrono::steady_clock::now();
 
+        std::error_code ec;
         auto iterator = std::filesystem::recursive_directory_iterator(
             root,
-            std::filesystem::directory_options::skip_permission_denied);
+            std::filesystem::directory_options::skip_permission_denied,
+            ec);
+
+        if (ec)
+        {
+            callback(progress);
+            co_return files;
+        }
 
         auto end = std::filesystem::recursive_directory_iterator();
         for (; iterator != end; ++iterator)
