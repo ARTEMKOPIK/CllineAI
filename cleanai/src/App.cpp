@@ -16,7 +16,7 @@ namespace CleanAI
     {
         try
         {
-            m_ollama->EnsureServerAvailableAsync().get();
+            m_ollama->EnsureServerAvailable();
         }
         catch (winrt::hresult_error const& ex)
         {

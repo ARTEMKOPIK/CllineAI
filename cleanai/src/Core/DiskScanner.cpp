@@ -29,10 +29,8 @@ namespace
 
 namespace CleanAI::Core
 {
-    winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::FileItem>> DiskScanner::ScanAsync(std::wstring root, ProgressCallback callback)
+    std::vector<Models::FileItem> DiskScanner::Scan(std::wstring const& root, ProgressCallback callback)
     {
-        co_await winrt::resume_background();
-
         std::vector<Models::FileItem> files;
         ScanProgress progress{};
         auto lastUpdate = std::chrono::steady_clock::now();
@@ -46,7 +44,7 @@ namespace CleanAI::Core
         if (ec)
         {
             callback(progress);
-            co_return files;
+            return files;
         }
 
         auto end = std::filesystem::recursive_directory_iterator();
@@ -93,7 +91,7 @@ namespace CleanAI::Core
         }
 
         callback(progress);
-        co_return files;
+        return files;
     }
 
     std::vector<std::wstring> DiskScanner::DetectLocalDrives()

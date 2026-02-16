@@ -23,7 +23,8 @@ namespace CleanAI::Pages
         auto selectedDrive = winrt::unbox_value<winrt::hstring>(combo.SelectedItem());
         std::wstring root = selectedDrive.c_str();
 
-        auto files = co_await m_scanner->ScanAsync(root, [this](Core::ScanProgress const& progress)
+        co_await winrt::resume_background();
+        auto files = m_scanner->Scan(root, [this](Core::ScanProgress const& progress)
         {
             DispatcherQueue().TryEnqueue([this, progress]()
             {
