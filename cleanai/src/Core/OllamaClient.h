@@ -11,6 +11,7 @@ namespace CleanAI::Core
     {
     public:
         OllamaClient();
+        explicit OllamaClient(utility::string_t baseUrl);
         winrt::Windows::Foundation::IAsyncAction EnsureServerAvailableAsync();
         winrt::Windows::Foundation::IAsyncOperation<std::vector<Models::Recommendation>> ClassifyBatchAsync(std::vector<Models::FileItem> const& files);
 
