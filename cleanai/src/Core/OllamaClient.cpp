@@ -148,7 +148,8 @@ namespace
         }
         catch (...)
         {
-            // Не блокируем запуск: при ошибке проверки/загрузки модели классификация всё равно выполнится с fallback на Ask.
+            // Не блокируем именно загрузку модели: на этапе классификации это даст fallback на Ask.
+            // Важно: ошибки установки/запуска Ollama в EnsureServerAvailableAsync по-прежнему приводят к исключению.
         }
     }
 }
@@ -202,7 +203,7 @@ namespace CleanAI::Core
         {
             Models::Recommendation recommendation{};
             recommendation.type = L"НЕИЗВЕСТНО";
-            recommendation.reason = L"Классификация tinyllama";
+            recommendation.reason = L"Классификация TinyLlama";
             recommendation.confidence = 0.70;
             recommendation.action = Models::RecommendationAction::Ask;
 

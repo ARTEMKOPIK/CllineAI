@@ -53,6 +53,11 @@ jobs:
         run: |
           msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 
+      - name: Run Core logic tests (ctest)
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+
       - name: Collect executable
         shell: pwsh
         run: |
