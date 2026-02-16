@@ -5,7 +5,7 @@
 В репозитории используется `.github/workflows/build.yml` с максимально простой схемой:
 
 1. `vcpkg install` зависимостей;
-2. workflow ищет CMake-конфиг Windows App SDK по нескольким стандартным корням Windows SDK/Visual Studio на `windows-2022` (оба имени: `Microsoft.WindowsAppSDKConfig.cmake` и `microsoft.windowsappsdk-config.cmake`) и экспортирует путь в `WINDOWS_APP_SDK_DIR`;
+2. workflow ищет CMake-конфиг Windows App SDK по нескольким стандартным корням Windows SDK/Visual Studio на `windows-2022` (оба имени: `Microsoft.WindowsAppSDKConfig.cmake` и `microsoft.windowsappsdk-config.cmake`); если не найдено — запускается детерминированный NuGet fallback с фиксированными версиями;
 3. `cmake` генерирует `build/CleanAI.sln` c `-DMicrosoft.WindowsAppSDK_DIR=...`;
 4. `msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m`.
 
@@ -13,7 +13,7 @@
 
 Потому что мы полностью убрали проблемный слой:
 
-- нет кастомных PowerShell-функций, которые парсят вывод `nuget/cmake`;
+- нет хрупкого парсинга stdout команд для вычисления путей;
 - нет записи произвольного stdout в `$GITHUB_ENV`;
 - нет парсинга stdout сторонних команд ради вычисления SDK-путей;
 - каждый шаг — одна явная команда.
