@@ -5,12 +5,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 if(NOT WIN32)
     message(FATAL_ERROR "CleanAI поддерживает только Windows 11 22H2+")
 endif()
 
 option(CLEANAI_HEADLESS_CI "Build headless CI stub instead of WinUI app" OFF)
-option(CLEANAI_AUTO_FALLBACK_HEADLESS "Fallback to headless build if WindowsAppSDK CMake package is missing" ON)
+option(CLEANAI_AUTO_FALLBACK_HEADLESS "Fallback to headless build if WindowsAppSDK CMake package is missing" OFF)
 
 add_compile_definitions(
     UNICODE

@@ -1,52 +1,34 @@
 # CleanAI
 
-## Windows CI (стабильный режим сборки)
+## Windows CI (только полноценная версия)
 
-В репозитории используется `.github/workflows/build.yml` с простой схемой:
+Сейчас пайплайн настроен жёстко: собирается **только полная WinUI-версия** приложения.
 
-1. `vcpkg install` зависимостей;
-2. `cmake` генерирует `build/CleanAI.sln` в обычном режиме; если WinUI SDK не найден — автоматически переключается на headless;
-3. `msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m`.
+Если на раннере нет нужных компонентов для полной версии, сборка **падает с ошибкой** и ничего «технического» пользователю не публикуется.
 
-### Что это значит
+### Что вы скачиваете как пользователь
 
-- Если на раннере доступен `Microsoft.WindowsAppSDK`, собирается полноценный WinUI-вариант.
-- Если пакет отсутствует, сборка не падает: CMake автоматически уходит в headless-режим.
-- Локально/в релизной среде можно принудительно выбрать нужный режим флагами CMake.
+- В Actions: артефакт **`CleanAI-win64-full-app`**.
+- В GitHub Release (для тегов `v*`): файл **`CleanAI-win64.zip`**.
 
-### Локальная сборка на Windows
+Это и есть полный пакет приложения.
 
-**CI-совместимый headless-вариант:**
+### Как запустить полную программу
 
-```powershell
-cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake" -DCLEANAI_HEADLESS_CI=ON
-msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
-```
+1. Скачайте `CleanAI-win64.zip`.
+2. Полностью распакуйте архив в обычную папку.
+3. Откройте папку `CleanAI-win64`.
+4. Запустите **`Start-CleanAI.bat`** (или напрямую `CleanAI.exe`).
 
-**Полный WinUI-вариант (как раньше):**
+### Важно
 
-```powershell
-cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake"
-msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
-```
+- `CleanAI.CoreLogicTests.exe` — это служебная проверка, не основная программа.
+- `CleanAI-headless-exe` больше не публикуется как пользовательский артефакт.
+- Если вы видите окно «CI-сборка», значит запущен не тот файл или старый артефакт.
 
-### Что сейчас публикует CI
+### Как понять, что это точно полная версия
 
-CI запускает обычную конфигурацию. Дальше есть два сценария:
+После запуска **полной** версии открывается нормальное окно приложения CleanAI.
 
-- если `Microsoft.WindowsAppSDK` найден — собирается обычная WinUI-версия;
-- если пакет не найден — CMake автоматически переключает сборку в `headless` (без падения пайплайна).
+Если вместо этого вы видите небольшое окно с текстом про «CI-сборку» — это не пользовательская версия (значит взят старый или не тот файл).
 
-Чтобы запретить автоматический откат и сразу получить ошибку при отсутствии WinUI SDK, добавьте флаг:
-
-```powershell
--DCLEANAI_AUTO_FALLBACK_HEADLESS=OFF
-```
-
-### Как получить пользовательскую версию
-
-На Windows 11 ставьте окружение Windows App SDK и запускайте «Полный WinUI-вариант» из инструкции выше. Если нужно готовое приложение для установки, используйте `cleanai/packaging/create_installer.bat`.
-
-### Отладка в CI
-
-При каждом запуске workflow выгружается артефакт `build-debug-logs` (даже при падении), где есть диагностика окружения раннера.

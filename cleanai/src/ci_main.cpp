@@ -1,21 +1,19 @@
 #include <windows.h>
 
-#include <string>
-
 int main()
 {
-    const std::string title = "CleanAI: CI-сборка";
-    const std::string message =
-        "Вы запустили headless CI-версию CleanAI.\n\n"
-        "Это техническая заглушка для проверки сборки в CI, "
-        "она не открывает графический интерфейс.\n\n"
-        "Чтобы получить обычное приложение с окном, пересоберите проект "
-        "без флага CLEANAI_HEADLESS_CI=ON.";
+    const wchar_t* title = L"CleanAI: CI-сборка";
+    const wchar_t* message =
+        L"Вы запустили headless CI-версию CleanAI.\n\n"
+        L"Это техническая заглушка для проверки сборки в CI, "
+        L"она не открывает графический интерфейс.\n\n"
+        L"Чтобы получить обычное приложение с окном, пересоберите проект "
+        L"без флага CLEANAI_HEADLESS_CI=ON.";
 
-    MessageBoxA(
+    MessageBoxW(
         nullptr,
-        message.c_str(),
-        title.c_str(),
+        message,
+        title,
         MB_OK | MB_ICONINFORMATION
     );
 

@@ -1,4 +1,4 @@
-name: Build Windows (MSBuild)
+name: Build Windows Full App (WinUI only)
 
 on:
   push:
@@ -43,10 +43,10 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP/vcpkg/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
-      - name: Generate Visual Studio solution (auto: WinUI or headless fallback)
+      - name: Generate Visual Studio solution (WinUI only)
         shell: pwsh
         run: |
-          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCLEANAI_AUTO_FALLBACK_HEADLESS=OFF
 
       - name: Build solution
         shell: pwsh
@@ -58,28 +58,46 @@ jobs:
         run: |
           ctest --test-dir build -C Release --output-on-failure
 
-      - name: Collect executable
+      - name: Collect full app bundle
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release -Force | Out-Null
-          if (-not (Test-Path "build/Release/CleanAI.exe")) {
-            throw "Executable build/Release/CleanAI.exe не найден после сборки"
-          }
-          Copy-Item "build/Release/CleanAI.exe" "release/CleanAI.exe" -Force
+          New-Item -ItemType Directory -Path "release/CleanAI-win64" -Force | Out-Null
 
-      - name: Upload binaries
+          if (-not (Test-Path "build/Release/CleanAI.exe")) {
+            throw "Полная WinUI-версия CleanAI.exe не найдена. Сборка остановлена."
+          }
+
+          Copy-Item "build/Release/*" "release/CleanAI-win64/" -Recurse -Force -Exclude "CleanAI.CoreLogicTests.exe", "CleanAI.CoreLogicTests.pdb"
+
+          @"
+          CleanAI for Windows x64
+
+          1) Распакуйте архив полностью.
+          2) Откройте папку CleanAI-win64.
+          3) Запустите Start-CleanAI.bat (или CleanAI.exe).
+          "@ | Set-Content -Path "release/CleanAI-win64/README.txt" -Encoding UTF8
+
+          @"
+          @echo off
+          cd /d %~dp0
+          start "" CleanAI.exe
+          "@ | Set-Content -Path "release/CleanAI-win64/Start-CleanAI.bat" -Encoding ASCII
+
+          Compress-Archive -Path "release/CleanAI-win64/*" -DestinationPath "release/CleanAI-win64.zip" -Force
+
+      - name: Upload full app bundle
         uses: actions/upload-artifact@v4
         with:
-          name: CleanAI-exe
+          name: CleanAI-win64-full-app
           path: |
-            release/CleanAI.exe
+            release/CleanAI-win64.zip
 
       - name: Publish GitHub release asset
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/CleanAI.exe
+            release/CleanAI-win64.zip
 
       - name: Upload debug logs
         if: always()
