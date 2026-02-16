@@ -28,11 +28,24 @@ namespace CleanAI::Core
         wcsftime(buffer, 32, L"%Y%m%d_%H%M%S", &utc);
 
         auto sessionPath = m_quarantineRoot / buffer;
-        auto relative = std::filesystem::relative(filePath, rootDrive);
+        std::error_code relativeError;
+        auto relative = std::filesystem::relative(filePath, rootDrive, relativeError);
+        if (relativeError || relative.empty())
+        {
+            relative = std::filesystem::path(filePath).filename();
+        }
+
         auto target = sessionPath / relative;
         std::filesystem::create_directories(target.parent_path());
 
-        MoveFileExW(filePath.c_str(), target.wstring().c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
+        auto targetWide = target.wstring();
+        auto moved = MoveFileExW(filePath.c_str(), targetWide.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
+        if (!moved)
+        {
+            auto errorCode = HRESULT_FROM_WIN32(GetLastError());
+            throw winrt::hresult_error(errorCode, L"Не удалось переместить файл в карантин");
+        }
+
         co_return target.wstring();
     }
 
@@ -41,7 +54,12 @@ namespace CleanAI::Core
         co_await winrt::resume_background();
 
         std::filesystem::create_directories(std::filesystem::path(originalPath).parent_path());
-        MoveFileExW(quarantinePath.c_str(), originalPath.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
+        auto restored = MoveFileExW(quarantinePath.c_str(), originalPath.c_str(), MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
+        if (!restored)
+        {
+            auto errorCode = HRESULT_FROM_WIN32(GetLastError());
+            throw winrt::hresult_error(errorCode, L"Не удалось восстановить файл из карантина");
+        }
     }
 
     winrt::Windows::Foundation::IAsyncAction QuarantineManager::CleanupOldAsync()
