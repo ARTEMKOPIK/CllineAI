@@ -29,10 +29,23 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP/vcpkg/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
+      - name: Resolve preinstalled Windows App SDK CMake path
+        id: windowsappsdk
+        shell: pwsh
+        run: |
+          $config = Get-ChildItem -Path "C:/Program Files (x86)/Microsoft SDKs/Windows App SDK" -Filter Microsoft.WindowsAppSDKConfig.cmake -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $config) {
+            throw "Microsoft.WindowsAppSDKConfig.cmake was not found on windows-2022 image."
+          }
+
+          $sdkDir = Split-Path -Path $config.FullName -Parent
+          "WINDOWS_APP_SDK_DIR=$sdkDir" >> $env:GITHUB_ENV
+          Write-Host "Resolved WINDOWS_APP_SDK_DIR=$sdkDir"
+
       - name: Generate Visual Studio solution
         shell: pwsh
         run: |
-          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" -DMicrosoft.WindowsAppSDK_DIR="$env:WINDOWS_APP_SDK_DIR"
 
       - name: Build solution
         shell: pwsh
