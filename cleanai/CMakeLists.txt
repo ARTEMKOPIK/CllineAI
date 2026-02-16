@@ -14,7 +14,7 @@ if(NOT WIN32)
 endif()
 
 option(CLEANAI_HEADLESS_CI "Build headless CI stub instead of WinUI app" OFF)
-option(CLEANAI_AUTO_FALLBACK_HEADLESS "Fallback to headless build if WindowsAppSDK CMake package is missing" ON)
+option(CLEANAI_AUTO_FALLBACK_HEADLESS "Fallback to headless build if WindowsAppSDK CMake package is missing" OFF)
 
 add_compile_definitions(
     UNICODE
