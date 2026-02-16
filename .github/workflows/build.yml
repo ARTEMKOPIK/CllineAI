@@ -80,7 +80,13 @@ jobs:
           @"
           @echo off
           cd /d %~dp0
-          start "" CleanAI.exe
+          if not exist "CleanAI.exe" (
+            echo [ERROR] Файл CleanAI.exe не найден рядом с батником.
+            echo Распакуйте архив полностью и запустите снова.
+            pause
+            exit /b 1
+          )
+          start "" "CleanAI.exe"
           "@ | Set-Content -Path "release/CleanAI-win64/Start-CleanAI.bat" -Encoding ASCII
 
           Compress-Archive -Path "release/CleanAI-win64/*" -DestinationPath "release/CleanAI-win64.zip" -Force
