@@ -40,6 +40,7 @@ if(CLEANAI_HEADLESS_CI)
     target_link_libraries(CleanAI.CoreLogicTests PRIVATE
         cpprestsdk::cpprest
         SQLite::SQLite3
+        runtimeobject
     )
 
     enable_testing()
