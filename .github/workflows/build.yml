@@ -1,4 +1,4 @@
-name: Build Windows (MSBuild)
+name: Build Windows Release (WinUI preferred)
 
 on:
   push:
@@ -43,10 +43,23 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP/vcpkg/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
-      - name: Generate Visual Studio solution (auto: WinUI or headless fallback)
+      - name: Generate Visual Studio solution (WinUI preferred, headless fallback allowed)
         shell: pwsh
         run: |
           cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Detect build flavor
+        id: flavor
+        shell: pwsh
+        run: |
+          $headless = Select-String -Path "build/CMakeCache.txt" -Pattern '^CLEANAI_HEADLESS_CI:BOOL=ON$' -Quiet
+          if ($headless) {
+            "mode=headless" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "Build mode: headless fallback" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          } else {
+            "mode=winui" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "Build mode: winui" | Tee-Object -FilePath build-logs/ci-debug.txt -Append
+          }
 
       - name: Build solution
         shell: pwsh
@@ -58,6 +71,12 @@ jobs:
         run: |
           ctest --test-dir build -C Release --output-on-failure
 
+      - name: Fail tagged release when only headless build is available
+        if: startsWith(github.ref, 'refs/tags/v') && steps.flavor.outputs.mode == 'headless'
+        shell: pwsh
+        run: |
+          throw "Tag build produced headless fallback. Полноценный WinUI-релиз недоступен на текущем раннере."
+
       - name: Collect executable
         shell: pwsh
         run: |
@@ -65,21 +84,65 @@ jobs:
           if (-not (Test-Path "build/Release/CleanAI.exe")) {
             throw "Executable build/Release/CleanAI.exe не найден после сборки"
           }
-          Copy-Item "build/Release/CleanAI.exe" "release/CleanAI.exe" -Force
 
-      - name: Upload binaries
+          if ("${{ steps.flavor.outputs.mode }}" -eq "headless") {
+            Copy-Item "build/Release/CleanAI.exe" "release/CleanAI-headless.exe" -Force
+          } else {
+            Copy-Item "build/Release/CleanAI.exe" "release/CleanAI.exe" -Force
+          }
+
+      - name: Collect WinUI release bundle
+        if: steps.flavor.outputs.mode == 'winui'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "release/CleanAI-win64" -Force | Out-Null
+          Copy-Item "build/Release/*" "release/CleanAI-win64/" -Recurse -Force -Exclude "CleanAI.CoreLogicTests.exe", "CleanAI.CoreLogicTests.pdb"
+          @"
+          CleanAI for Windows x64
+
+          1) Распакуйте архив полностью.
+          2) Откройте папку CleanAI-win64.
+          3) Запустите Start-CleanAI.bat (или CleanAI.exe).
+          4) Не запускайте CleanAI.CoreLogicTests.exe — это служебная проверка, а не приложение.
+          "@ | Set-Content -Path "release/CleanAI-win64/README.txt" -Encoding UTF8
+          @"
+          @echo off
+          cd /d %~dp0
+          start "" CleanAI.exe
+          "@ | Set-Content -Path "release/CleanAI-win64/Start-CleanAI.bat" -Encoding ASCII
+
+          Compress-Archive -Path "release/CleanAI-win64/*" -DestinationPath "release/CleanAI-win64.zip" -Force
+
+      - name: Upload headless diagnostic binary
+        if: steps.flavor.outputs.mode == 'headless'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CleanAI-headless-exe
+          path: |
+            release/CleanAI-headless.exe
+
+      - name: Upload WinUI executable
+        if: steps.flavor.outputs.mode == 'winui'
         uses: actions/upload-artifact@v4
         with:
           name: CleanAI-exe
           path: |
             release/CleanAI.exe
 
+      - name: Upload WinUI bundle
+        if: steps.flavor.outputs.mode == 'winui'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CleanAI-win64-full-app
+          path: |
+            release/CleanAI-win64.zip
+
       - name: Publish GitHub release asset
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.flavor.outputs.mode == 'winui'
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/CleanAI.exe
+            release/CleanAI-win64.zip
 
       - name: Upload debug logs
         if: always()
