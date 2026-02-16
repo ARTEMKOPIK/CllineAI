@@ -4,6 +4,15 @@
 
 namespace CleanAI::Core
 {
+    namespace
+    {
+        std::wstring SafeColumnText16(sqlite3_stmt* stmt, int column)
+        {
+            auto const* value = static_cast<wchar_t const*>(sqlite3_column_text16(stmt, column));
+            return value != nullptr ? std::wstring(value) : std::wstring();
+        }
+    }
+
     HistoryDatabase::HistoryDatabase()
     {
         wchar_t* localAppData{};
@@ -70,7 +79,12 @@ namespace CleanAI::Core
         }
 
         sqlite3_stmt* stmt{};
-        sqlite3_prepare16_v2(m_db, L"INSERT INTO actions(timestamp,path,action,size,quarantine_path) VALUES(?,?,?,?,?)", -1, &stmt, nullptr);
+        auto const prepareResult = sqlite3_prepare16_v2(m_db, L"INSERT INTO actions(timestamp,path,action,size,quarantine_path) VALUES(?,?,?,?,?)", -1, &stmt, nullptr);
+        if (prepareResult != SQLITE_OK || !stmt)
+        {
+            return;
+        }
+
         sqlite3_bind_text16(stmt, 1, record.timestamp.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 2, record.path.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 3, record.action.c_str(), -1, SQLITE_TRANSIENT);
@@ -88,7 +102,12 @@ namespace CleanAI::Core
         }
 
         sqlite3_stmt* stmt{};
-        sqlite3_prepare16_v2(m_db, L"INSERT OR REPLACE INTO ai_cache(path_hash,recommendation,confidence,timestamp) VALUES(?,?,?,datetime('now'))", -1, &stmt, nullptr);
+        auto const prepareResult = sqlite3_prepare16_v2(m_db, L"INSERT OR REPLACE INTO ai_cache(path_hash,recommendation,confidence,timestamp) VALUES(?,?,?,datetime('now'))", -1, &stmt, nullptr);
+        if (prepareResult != SQLITE_OK || !stmt)
+        {
+            return;
+        }
+
         sqlite3_bind_text16(stmt, 1, pathHash.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 2, recommendation.reason.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_double(stmt, 3, recommendation.confidence);
@@ -105,16 +124,20 @@ namespace CleanAI::Core
         }
 
         sqlite3_stmt* stmt{};
-        sqlite3_prepare16_v2(m_db, L"SELECT timestamp,path,action,size,quarantine_path FROM actions ORDER BY id DESC", -1, &stmt, nullptr);
+        auto const prepareResult = sqlite3_prepare16_v2(m_db, L"SELECT timestamp,path,action,size,quarantine_path FROM actions ORDER BY id DESC", -1, &stmt, nullptr);
+        if (prepareResult != SQLITE_OK || !stmt)
+        {
+            return result;
+        }
 
         while (sqlite3_step(stmt) == SQLITE_ROW)
         {
             HistoryRecord record{};
-            record.timestamp = static_cast<wchar_t const*>(sqlite3_column_text16(stmt, 0));
-            record.path = static_cast<wchar_t const*>(sqlite3_column_text16(stmt, 1));
-            record.action = static_cast<wchar_t const*>(sqlite3_column_text16(stmt, 2));
+            record.timestamp = SafeColumnText16(stmt, 0);
+            record.path = SafeColumnText16(stmt, 1);
+            record.action = SafeColumnText16(stmt, 2);
             record.sizeBytes = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 3));
-            record.quarantinePath = static_cast<wchar_t const*>(sqlite3_column_text16(stmt, 4));
+            record.quarantinePath = SafeColumnText16(stmt, 4);
             result.push_back(std::move(record));
         }
 
