@@ -29,20 +29,19 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP/vcpkg/vcpkg.exe" install cpprestsdk:x64-windows sqlite3:x64-windows
 
+      - name: Generate Visual Studio solution
+        shell: pwsh
+        run: |
+          cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake"
+
       - name: Build solution
         shell: pwsh
         run: |
-          $solution = "cleanai/CleanAI.sln"
-          if (-not (Test-Path $solution)) {
-            throw "Solution file '$solution' was not found in repository. Commit a static Visual Studio solution/project to use pure MSBuild pipeline (no CMake)."
-          }
-
-          msbuild $solution /p:Configuration=Release /p:Platform=x64 /m
+          msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: CleanAI-Release
           path: |
-            cleanai/x64/Release/**
-            cleanai/Release/**
+            build/Release/**

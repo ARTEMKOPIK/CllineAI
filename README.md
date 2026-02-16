@@ -1,24 +1,25 @@
 # CllineAI
 
-## Windows CI (упрощённый стек)
+## Windows CI (стабильный вариант без кастомных PowerShell-скриптов)
 
-Проект переведён на максимально простой CI-пайплайн в `.github/workflows/build.yml`:
+В репозитории используется `.github/workflows/build.yml` с максимально простой схемой:
 
-- без CMake;
-- без NuGet-резолва Windows App SDK;
-- без кастомного PowerShell-парсинга вывода команд;
-- с прямым `msbuild` вызовом решения.
+1. `vcpkg install` зависимостей;
+2. `cmake` один раз генерирует `build/CleanAI.sln` для Visual Studio 2022;
+3. `msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m`.
 
-### Что важно
+### Почему больше нет бага с «утечкой вывода команд»
 
-Текущая схема требует **статический файл решения** в репозитории:
+Потому что мы полностью убрали проблемный слой:
 
-- `cleanai/CleanAI.sln`
+- нет кастомных PowerShell-функций, которые парсят вывод `nuget/cmake`;
+- нет записи произвольного stdout в `$GITHUB_ENV`;
+- нет ветвистой логики с авто-поиском SDK-путей по текстовому выводу команд;
+- каждый шаг — одна явная команда.
 
-Если его нет, workflow завершится с явной ошибкой и подсказкой, что нужно закоммитить `.sln/.vcxproj`.
-
-### Одна команда для сборки
+### Команды для локальной сборки на Windows
 
 ```powershell
-msbuild cleanai/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
+cmake -S cleanai -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="<VCPKG_ROOT>/scripts/buildsystems/vcpkg.cmake"
+msbuild build/CleanAI.sln /p:Configuration=Release /p:Platform=x64 /m
 ```
