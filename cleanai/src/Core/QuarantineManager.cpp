@@ -11,7 +11,13 @@ namespace CleanAI::Core
         wchar_t* localAppData{};
         size_t len{};
         _wdupenv_s(&localAppData, &len, L"LOCALAPPDATA");
-        m_quarantineRoot = std::filesystem::path(localAppData) / L"CleanAI" / L"quarantine";
+
+        auto const appDataPath =
+            (localAppData != nullptr && len > 0)
+                ? std::filesystem::path(localAppData)
+                : std::filesystem::temp_directory_path();
+
+        m_quarantineRoot = appDataPath / L"CleanAI" / L"quarantine";
         std::filesystem::create_directories(m_quarantineRoot);
         free(localAppData);
     }
