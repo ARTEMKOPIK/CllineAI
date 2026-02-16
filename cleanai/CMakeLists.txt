@@ -21,6 +21,23 @@ add_compile_definitions(
 find_package(cpprestsdk REQUIRED)
 find_package(SQLite3 REQUIRED)
 
+add_executable(CleanAI.CoreLogicTests
+    tests/CoreLogicTests.cpp
+    src/Core/DiskScanner.cpp
+    src/Core/OllamaClient.cpp
+)
+
+target_include_directories(CleanAI.CoreLogicTests PRIVATE src)
+
+target_link_libraries(CleanAI.CoreLogicTests PRIVATE
+    cpprestsdk::cpprest
+    SQLite::SQLite3
+    runtimeobject
+)
+
+enable_testing()
+add_test(NAME CoreLogicTests COMMAND CleanAI.CoreLogicTests)
+
 if(CLEANAI_HEADLESS_CI)
     add_executable(CleanAI src/ci_main.cpp)
 
@@ -28,23 +45,6 @@ if(CLEANAI_HEADLESS_CI)
         cpprestsdk::cpprest
         SQLite::SQLite3
     )
-
-    add_executable(CleanAI.CoreLogicTests
-        tests/CoreLogicTests.cpp
-        src/Core/DiskScanner.cpp
-        src/Core/OllamaClient.cpp
-    )
-
-    target_include_directories(CleanAI.CoreLogicTests PRIVATE src)
-
-    target_link_libraries(CleanAI.CoreLogicTests PRIVATE
-        cpprestsdk::cpprest
-        SQLite::SQLite3
-        runtimeobject
-    )
-
-    enable_testing()
-    add_test(NAME CoreLogicTests COMMAND CleanAI.CoreLogicTests)
 
     install(TARGETS CleanAI RUNTIME DESTINATION .)
     return()
